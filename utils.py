@@ -7,6 +7,14 @@ import datetime
 import json
 from typing import Dict, List, Tuple, Any, Optional
 from supabase import Client
+import pytz
+
+PH_TZ = pytz.timezone("Asia/Manila")
+
+
+def get_ph_today() -> datetime.date:
+    """Returns today's date in Philippines time (Asia/Manila), regardless of server timezone."""
+    return datetime.datetime.now(PH_TZ).date()
 
 
 # ==========================================
@@ -66,19 +74,19 @@ def update_weekly_package(
 # ==========================================
 def get_current_sunday() -> datetime.date:
     """
-    Calculate the most recent Sunday (Philippines timezone aware).
+    Calculate the most recent Sunday, using Philippines (Asia/Manila) time.
     
     Returns:
         The Sunday date of the current week
     """
-    today = datetime.date.today()
+    today = get_ph_today()
     sunday_offset = (today.weekday() + 1) % 7
     return today - datetime.timedelta(days=sunday_offset)
 
 
 def get_journal_date_key() -> str:
-    """Returns a standardized string key for today's entry (e.g., '2026-07-12')."""
-    return datetime.date.today().isoformat()
+    """Returns a standardized string key for today's entry in PH time (e.g., '2026-07-12')."""
+    return get_ph_today().isoformat()
 
 def is_first_journal_entry_today(db_journal: dict) -> bool:
     """
@@ -258,34 +266,6 @@ def initialize_journal_entry() -> Dict[str, str]:
         "hardest_challenge": "",
         "gratitude": "",
     }
-
-
-def get_today_journal_entry(db_journal: Dict[str, Any]) -> Dict[str, str]:
-    """
-    Get today's journal entry or initialize a new one.
-    
-    Args:
-        db_journal: Journal data from database
-        
-    Returns:
-        Today's journal entry
-    """
-    journal_date_key = get_journal_date_key()
-    return db_journal.get(journal_date_key, initialize_journal_entry())
-
-
-def is_first_journal_entry_today(db_journal: Dict[str, Any]) -> bool:
-    """
-    Check if journal has been filled out today.
-    
-    Args:
-        db_journal: Journal data from database
-        
-    Returns:
-        True if no entry for today exists
-    """
-    journal_date_key = get_journal_date_key()
-    return journal_date_key not in db_journal
 
 
 # ==========================================

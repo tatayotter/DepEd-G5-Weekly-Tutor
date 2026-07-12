@@ -103,14 +103,39 @@ if selected_day and day_data:
         selected_subject = subject_mapping[selected_display]
 
 # ==========================================
-# 7. Render Lesson Summary & Gamified Dynamic Quiz Form (FULL ARCHITECTURE)
+# 7. Render Lesson Summary & Gamified Dynamic Quiz Form (FULL ARCHITECTURE WITH GATEKEEPER LOCKOUT)
 # ==========================================
 if selected_subject:
+    subject_uid = f"{target_day}_{selected_subject}"
+    
+    # 🎮 FETCH DATA: Load fresh tracking records from current database row payload
+    row_data = package_data_list[0] if package_data_list else {}
+    
+    # Read Mastered Quizzes List Array Safely
+    db_mastered = row_data.get('mastered_quizzes', [])
+    if not isinstance(db_mastered, list):
+        db_mastered = []
+    
+    # 🛑 CRITICAL GATEKEEPER LOCKOUT: Intercept click if subject has already been perfected
+    if subject_uid in db_mastered:
+        st.subheader(f"🏆 {selected_subject} Mastered!")
+        st.success(f"✨ Great job! You have already earned a perfect score and completed this module. Move on to your remaining daily objectives to level up your character sheet!")
+        
+        # Pull Character Stats for display even in locked view
+        char_stats = row_data.get('character_stats', {"level": 1, "xp": 0, "gold": 0})
+        if not isinstance(char_stats, dict):
+            char_stats = {"level": 1, "xp": 0, "gold": 0}
+            
+        st.info(f"🎯 Quest Objective: Complete. Current Account Standing: Level {char_stats.get('level')} | 🪙 {char_stats.get('gold')} Gold.")
+        
+        # Hard stop execution here. The rest of the quiz components will not compile or render.
+        st.stop()
+
+    # --- Proceed normally if subject is NOT mastered yet ---
     subject_data = day_data[selected_subject]
     quiz_data = subject_data.get('quiz', [])
     
-    # Define persistent keys unique to this subject and day
-    subject_uid = f"{target_day}_{selected_subject}"
+    # Define persistent keys unique to this active session run
     quiz_active_key = f"active_{subject_uid}"
     submitted_key = f"submitted_{subject_uid}"
     score_key = f"score_{subject_uid}"
@@ -118,7 +143,7 @@ if selected_subject:
     saved_answers_key = f"saved_answers_{subject_uid}"
     attempt_count_key = f"attempts_{subject_uid}"
     
-    # Initialize basic quiz session states
+    # Initialize basic quiz session states if missing
     if quiz_active_key not in st.session_state:
         st.session_state[quiz_active_key] = False
     if submitted_key not in st.session_state:
@@ -128,26 +153,14 @@ if selected_subject:
         st.session_state[saved_answers_key] = {}
         st.session_state[attempt_count_key] = 0
 
-    # 🎮 FETCH DATA: Load fresh tracking records from current database row payload
-    row_data = package_data_list[0] if package_data_list else {}
-    
-    # Read Character Stats Safely
+    # Read Remaining Database Fields Safely
     char_stats = row_data.get('character_stats', {"level": 1, "xp": 0, "gold": 0})
     if not isinstance(char_stats, dict):
         char_stats = {"level": 1, "xp": 0, "gold": 0}
         
-    # Read Quiz Attempts Safely
     db_attempts = row_data.get('quiz_attempts', {})
     if not isinstance(db_attempts, dict):
         db_attempts = {}
-
-    # Read Mastered Quizzes List Array Safely
-    db_mastered = row_data.get('mastered_quizzes', [])
-    if not isinstance(db_mastered, list):
-        db_mastered = []
-    
-    # Determine mastery state
-    is_already_mastered = subject_uid in db_mastered
 
     # Sync attempts database state to active local viewing session memory
     if st.session_state[attempt_count_key] == 0:
@@ -165,14 +178,9 @@ if selected_subject:
     st.sidebar.markdown(f"🔢 Attempts Made for this subject: **{st.session_state[attempt_count_key]}**")
     st.sidebar.markdown("---")
 
-    # SIDEBAR CONTROLLER: Manage Quiz Navigation States & Mastery Rules
+    # SIDEBAR CONTROLLER: Manage Quiz Navigation States
     st.sidebar.markdown("### 🕹️ Quiz Status")
-    if is_already_mastered:
-        st.sidebar.success("🏆 Topic Mastered!")
-        st.sidebar.caption("Maximum gold and XP already claimed for this quest!")
-        # Force active state off to guarantee he stays in summary reading mode
-        st.session_state[quiz_active_key] = False 
-    elif st.session_state[submitted_key]:
+    if st.session_state[submitted_key]:
         st.sidebar.success("✅ Evaluation Complete!")
         if st.sidebar.button("🔓 Open Study Notes Again"):
             st.session_state[quiz_active_key] = False
@@ -192,13 +200,10 @@ if selected_subject:
     # SCREEN ROUTING CONTROLLER
     # ==========================================
     
-    # LAYOUT STATE A: Reading / Study Mode (Or View Mastered Mode)
-    if is_already_mastered or (not st.session_state[quiz_active_key] and not st.session_state[submitted_key]):
+    # LAYOUT STATE A: Reading / Study Mode
+    if not st.session_state[quiz_active_key] and not st.session_state[submitted_key]:
         st.subheader(f"📖 Reviewing: {selected_subject}")
-        if is_already_mastered:
-            st.warning("✨ Excellent work! You unlocked a perfect score on this challenge and completed the quest! Review the information below as much as you like.")
-        else:
-            st.info("💡 Read through these core concepts and examples carefully. When you are ready to earn rewards, hit the sidebar button to lock the notes and start your quest!")
+        st.info("💡 Read through these core concepts and examples carefully. When you are ready to earn rewards, hit the sidebar button to lock the notes and start your quest!")
         
         clean_markdown = subject_data['summary_markdown'].replace(r'\n', '\n')
         st.markdown(clean_markdown)
@@ -269,8 +274,8 @@ if selected_subject:
                         xp_earned = 0
                         gold_earned = 0
                         
-                        # Process rewards ONLY if they hit 5/5 and haven't mastered it before
-                        if score == len(quiz_data) and not is_already_mastered:
+                        # Process rewards ONLY if they hit 5/5
+                        if score == len(quiz_data):
                             xp_earned = 200
                             gold_earned = 50
                             
@@ -297,7 +302,7 @@ if selected_subject:
                             char_stats['gold'] = new_gold
                             char_stats['level'] = current_level
                             
-                            # Add this unique subject key to the mastery collection array
+                            # Add this unique subject key to the mastery array to trigger future lockout labels
                             db_mastered.append(subject_uid)
                             
                             # Set flash notification state metrics

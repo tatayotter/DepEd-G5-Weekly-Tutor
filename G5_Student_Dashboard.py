@@ -307,9 +307,11 @@ with tab_board:
                         with st.expander(f"❌ Question {item['num']}: {item['q']}"):
                             st.write(f"**Your Choice:** `{item['mine']}`")
                             st.write(f"**Correct Target:** `{item['right']}`")
-# ==========================================
+        # ==========================================
         # 📜 ADVENTURER'S GUILD JOURNAL LOG
         # ==========================================
+        # Notice this aligns perfectly at 8 spaces! It sits outside the active quiz viewport,
+        # ensuring it always displays at the bottom of the main Quest Board Hub tab.
         st.markdown("---")
         st.subheader("📜 The Adventurer's Guild Journal")
         st.markdown("Record your daily travels, battle milestones, and future campaigns to earn your daily bounty.")
@@ -331,101 +333,6 @@ with tab_board:
                 st.caption("✅ *Daily reflection logged! Updates are allowed, but bonus gold has already been claimed for today.*")
             else:
                 st.info("🎁 *First entry today rewards: +🪙 50 Gold | +✨ 50 XP (Available 7 days a week)*")
-            
-            j_done = st.text_area(
-                "⚔️ What did I accomplish or do today?", 
-                value=todays_log.get("done_today", ""),
-                placeholder="Write down what lessons you finished, skills you practiced, or activities you enjoyed...",
-                key="journal_done_today_input"
-            )
-            
-            j_tomorrow = st.text_area(
-                "🗺️ What will I do tomorrow?", 
-                value=todays_log.get("tomorrow_plan", ""),
-                placeholder="What objectives, modules, or goals are you going to tackle next morning?",
-                key="journal_tomorrow_plan_input"
-            )
-            
-            j_challenge = st.text_area(
-                "🐉 What was the hardest challenge I faced today, and how did I handle it?", 
-                value=todays_log.get("hardest_challenge", ""),
-                placeholder="A tough problem? A tricky quiz question? How did you manage to push past it?",
-                key="journal_challenge_input"
-            )
-            
-            j_gratitude = st.text_input(
-                "💎 Name 1 thing I am grateful for today:", 
-                value=todays_log.get("gratitude", ""),
-                placeholder="Something fun that happened, or something nice Tatay or Mom did...",
-                key="journal_gratitude_input"
-            )
-            
-            col_save_j, _ = st.columns([1, 3])
-            with col_save_j:
-                if st.button("💾 Seal Journal Entry", key="btn_save_daily_journal_log"):
-                    # Check if this is his absolute FIRST entry for today's date string
-                    is_first_entry_today = journal_date_str not in db_journal
-                    
-                    # Build payload schema dictionary
-                    db_journal[journal_date_str] = {
-                        "done_today": j_done.strip(),
-                        "tomorrow_plan": j_tomorrow.strip(),
-                        "hardest_challenge": j_challenge.strip(),
-                        "gratitude": j_gratitude.strip()
-                    }
-                    
-                    # Process rewards only on the initial daily creation loop
-                    gold_earned = 0
-                    xp_earned = 0
-                    if is_first_entry_today:
-                        gold_earned = 50
-                        xp_earned = 50 
-                        
-                        new_gold = char_stats.get('gold', 0) + gold_earned
-                        new_xp = char_stats.get('xp', 0) + xp_earned
-                        lvl = char_stats.get('level', 1)
-                        
-                        # Handle Level Up threshold rules (Every 1000 XP)
-                        if new_xp >= 1000:
-                            lvl += 1
-                            new_xp -= 1000
-                            st.toast("👑 LEVEL UP! Your character grew stronger!")
-                            
-                        char_stats['gold'] = new_gold
-                        char_stats['xp'] = new_xp
-                        char_stats['level'] = lvl
-                    
-                    try:
-                        # Commit both the journal log text AND his character progress updates to Supabase
-                        supabase.table("weekly_packages").update({
-                            "journal_logs": db_journal,
-                            "character_stats": char_stats
-                        }).eq("week_starting_date", str(current_sunday)).execute()
-                        
-                        if is_first_entry_today:
-                            st.success(f"🎉 Journal sealed! Quest Rewards Claimed: +🪙 {gold_earned} Gold | +✨ {xp_earned} XP!")
-                        else:
-                            st.success("📝 Journal logs updated successfully in the archive stone!")
-                            
-                        st.balloons()
-                        st.rerun()
-                    except Exception as je:
-                        st.error(f"Failed to save journal logs: {str(je)}")
-
-        # Print past historical entries for this week as an inspiring ledger checklist
-        past_dates = sorted([d for d in db_journal.keys() if d != journal_date_str], reverse=True)
-        if past_dates:
-            st.write("---")
-            with st.expander("📖 View Past Journal Entries This Week", expanded=False):
-                for past_date in past_dates:
-                    p_log = db_journal[past_date]
-                    p_date_obj = datetime.datetime.strptime(past_date, "%Y-%m-%d")
-                    st.markdown(f"#### 📅 {p_date_obj.strftime('%A, %B %d')} Ledger")
-                    st.markdown(f"**Done:** {p_log.get('done_today')}")
-                    st.markdown(f"**Plan:** {p_log.get('tomorrow_plan')}")
-                    st.markdown(f"**Challenge Overcome:** {p_log.get('hardest_challenge')}")
-                    st.markdown(f"**Gratitude Core:** ✨ {p_log.get('gratitude')}")
-                    st.markdown("---")
 
 # ----------------------------------------------------
 # TAB B: THE REWARDS VAULT SHOP

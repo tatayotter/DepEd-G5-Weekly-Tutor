@@ -85,25 +85,34 @@ if not day_data:
 
 selected_subject = st.sidebar.selectbox("Choose a Subject", list(day_data.keys()))
 
-# 7. Render Lesson Summary & Dynamic Quiz Form
+# 7. Render Lesson Summary & Dynamic Quiz Form with Anti-Cheat Toggles
 if selected_subject:
     subject_data = day_data[selected_subject]
-    col1, col2 = st.columns([1, 1], gap="large")
+    quiz_data = subject_data.get('quiz', [])
     
-    with col1:
-        st.subheader(f"📖 {selected_subject} Core Points")
+    # Checkbox to handle screen state toggle
+    start_quiz = st.sidebar.checkbox("📝 Ready? Hide Notes & Start Quiz", key=f"toggle_{target_day}_{selected_subject}")
+    st.sidebar.markdown("---")
+    
+    # Layout State A: Reading Mode (Quiz Hidden, Notes Visible)
+    if not start_quiz:
+        st.subheader(f"📖 Reviewing: {selected_subject}")
+        st.info("💡 Read through these core concepts carefully. When you are ready to test your memory, check the box in the left sidebar to hide the notes and unlock your quiz!")
+        
         clean_markdown = subject_data['summary_markdown'].replace(r'\n', '\n')
         st.markdown(clean_markdown)
         
-    with col2:
-        st.subheader("🧠 Quick Check-In Quiz")
-        quiz_data = subject_data.get('quiz', [])
+    # Layout State B: Testing Mode (Notes Hidden, Quiz Visible)
+    else:
+        st.subheader(f"🧠 Quiz Time: {selected_subject}")
+        st.warning("🚫 Study notes are hidden. Do your best!")
         
         if not quiz_data:
             st.info("No quiz items found for this specific subject segment.")
         else:
-            with st.form(key=f"quiz_form_{target_day}_{selected_subject}"):
+            with st.form(key=f"secure_quiz_form_{target_day}_{selected_subject}"):
                 user_answers = {}
+                
                 for i, q in enumerate(quiz_data):
                     st.write(f"**Q{i+1}: {q['question']}**")
                     user_answers[i] = st.radio(
@@ -122,16 +131,17 @@ if selected_subject:
                     unanswered = any(ans is None for ans in user_answers.values())
                     
                     if unanswered:
-                        st.warning("⚠️ Please answer all the questions before clicking submit.")
+                        st.warning("⚠️ Please answer all 5 questions before clicking submit.")
                     else:
                         for i, q in enumerate(quiz_data):
                             if user_answers[i] == q['correct_answer']:
                                 score += 1
                         
+                        # Provide Feedback
                         if score == total:
                             st.balloons()
                             st.success(f"🎉 Perfect Score! {score}/{total}. Outstanding retention!")
-                        elif score >= (total / 2):
-                            st.success(f"👍 Good effort! You scored {score}/{total}. Go over what you missed with Tatay.")
+                        elif score >= 3:
+                            st.success(f"👍 Good effort! You scored {score}/{total}. Uncheck the sidebar to review the items missed with Tatay.")
                         else:
-                            st.warning(f"📚 You scored {score}/{total}. Let's read over today's core summary points on the left one more time together.")
+                            st.warning(f"📚 You scored {score}/{total}. Uncheck the sidebar to read over today's core summary points one more time.")

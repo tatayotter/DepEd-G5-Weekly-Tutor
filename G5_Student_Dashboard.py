@@ -7,7 +7,7 @@ import json
 # 1. Page Configuration & Setup
 # ==========================================
 st.set_page_config(
-    page_title="Grade 5 Learning Tavern",
+    page_title="Grade 5 Learning Hall",
     page_icon="⚔️",
     layout="wide",
     initial_sidebar_state="expanded"
@@ -18,6 +18,7 @@ st.markdown("""
 <style>
     .stButton>button { width: 100%; border-radius: 8px; font-weight: bold; }
     .quest-card { padding: 20px; border-radius: 12px; background-color: #111; border: 1px solid #333; margin-bottom: 15px; }
+    .admin-stat { padding: 15px; border-radius: 8px; background-color: #1a1a1a; border-left: 4px solid #deff9a; }
 </style>
 """, unsafe_allow_html=True)
 
@@ -102,7 +103,6 @@ if not isinstance(db_attempts, dict): db_attempts = {}
 db_mastered = row_data.get('mastered_quizzes', [])
 if not isinstance(db_mastered, list): db_mastered = []
 
-# Fetch or initialize rewards claim list log
 db_claims = row_data.get('claimed_rewards', [])
 if not isinstance(db_claims, list): db_claims = []
 
@@ -136,19 +136,21 @@ if st.session_state["active_quest_uid"]:
 # ==========================================
 # 7. MAIN INTERFACE: The Navigation Tabs
 # ==========================================
-tab_board, tab_vault = st.tabs(["🏰 Quest Board Landing Hub", "🏪 The Gold Token Rewards Vault"])
+tab_board, tab_vault, tab_admin = st.tabs([
+    "🏰 Quest Board Landing Hub", 
+    "🏪 The Gold Token Rewards Vault", 
+    "🔑 Tatay Admin"
+])
 
 # ----------------------------------------------------
 # TAB A: THE VISUAL QUEST BOARD
 # ----------------------------------------------------
 with tab_board:
-    # Check if a lesson viewport is actively running or if we should draw the map board
     if st.session_state["active_quest_uid"] is None:
         st.title("🗺️ Active Campaign Map")
         st.markdown("Select an open, active quest card from the schedule below to begin your training.")
         st.markdown("---")
 
-        # Render rows of Day Schedules
         for day_idx, day_name in weekday_map.items():
             is_today = (current_weekday_name == day_name)
             day_header = f"📆 {day_name} Objectives" + (" ⚡ (CURRENT RUN)" if is_today else "")
@@ -159,7 +161,6 @@ with tab_board:
                 if not day_subjects:
                     st.caption("No quests registered for this specific calendar path.")
                 else:
-                    # Layout active subject cards side-by-side using columns
                     card_cols = st.columns(len(day_subjects))
                     for idx, (sub_name, sub_payload) in enumerate(day_subjects.items()):
                         uid = f"{day_name}_{sub_name}"
@@ -176,21 +177,18 @@ with tab_board:
                                 st.markdown(f"🔢 *Attempts logged:* `{attempts}`")
                                 st.markdown("🎁 *Loot:* `200 XP | 50 Gold`")
                                 
-                                # Card action navigation entry trigger
                                 if st.button("📜 Enter Module", key=f"btn_{uid}"):
                                     st.session_state["active_quest_uid"] = uid
                                     st.rerun()
                             st.markdown("---")
                             
     else:
-        # RESOLVE VIEWPORT ROUTING FOR AN ACTIVE SUBJECT RUN
         active_uid = st.session_state["active_quest_uid"]
         act_day, act_sub = active_uid.split("_", 1)
         
         subject_data = weekly_data.get(act_day, {}).get(act_sub, {})
         quiz_data = subject_data.get('quiz', [])
         
-        # Instantiate session keys
         q_active_key = f"run_act_{active_uid}"
         q_sub_key = f"run_sub_{active_uid}"
         q_score_key = f"run_scr_{active_uid}"
@@ -206,18 +204,15 @@ with tab_board:
 
         st.title(f"⚔️ Campaign: {act_sub} ({act_day})")
         
-        # SCREEN VIEW A: Study Scroll Reading Window
         if not st.session_state[q_active_key] and not st.session_state[q_sub_key]:
             st.info("📖 Read through the core scrolls carefully. When ready to face the challenge, hit 'Start Quest Challenge' below.")
             clean_md = subject_data.get('summary_markdown', '').replace(r'\n', '\n')
             st.markdown(clean_md)
-            
             st.markdown("---")
             if st.button("⚔️ Lock Notes & Start Quest Challenge"):
                 st.session_state[q_active_key] = True
                 st.rerun()
                 
-        # SCREEN VIEW B: Active Question Forms Block
         else:
             st.subheader("📝 Answer all evaluation questions:")
             with st.container():
@@ -248,21 +243,18 @@ with tab_board:
                             else:
                                 wrong_items.append({"num": i+1, "q": q['question'], "mine": user_choices[i], "right": q['correct_answer']})
                         
-                        # Increment attempt logs immediately
                         current_attempts = db_attempts.get(active_uid, 0) + 1
                         db_attempts[active_uid] = current_attempts
                         
                         level_up = False
                         xp_earned, gold_earned = 0, 0
                         
-                        # Handle perfect score rewards calculations
                         if score == len(quiz_data):
                             xp_earned = 200
                             gold_earned = 50
-                            
                             if current_attempts == 1:
                                 xp_earned += 100
-                                gold_earned += 25 # Flawless run speed bonus loot
+                                gold_earned += 25
                             elif current_attempts == 2:
                                 xp_earned += 50
                                 
@@ -280,7 +272,6 @@ with tab_board:
                             char_stats['level'] = lvl
                             db_mastered.append(active_uid)
                             
-                        # Commit update parameters back to Supabase rows
                         try:
                             supabase.table("weekly_packages").update({
                                 "quiz_attempts": db_attempts,
@@ -296,7 +287,6 @@ with tab_board:
                         st.session_state[q_sub_key] = True
                         st.rerun()
 
-            # Post submission feedback display cards
             if st.session_state[q_sub_key]:
                 f_score = st.session_state[q_score_key]
                 t_items = len(quiz_data)
@@ -304,7 +294,7 @@ with tab_board:
                 if f_score == t_items:
                     st.balloons()
                     st.success("🏆 Perfect Score! You have successfully mastered this assignment module and locked it out!")
-                    st.session_state["active_quest_uid"] = None # Redirects path clear back to board
+                    st.session_state["active_quest_uid"] = None
                     if st.button("🏰 Return to Quest Board Hub"): st.rerun()
                 else:
                     st.warning(f"📚 You scored {f_score}/{t_items}. Review missed parameters, then unlock notes to re-study.")
@@ -326,7 +316,6 @@ with tab_vault:
     st.markdown("Exchange your earned digital gold tokens for real-world privileges and power-ups.")
     st.markdown("---")
     
-    # Define current catalog profile structures
     vault_catalog = {
         "voucher_30m": {"name": "🎮 30-Min Gaming Voucher", "cost": 100, "desc": "Unlocks 30 minutes of console gaming or modding runtime privileges."},
         "jollibee_burger": {"name": "🍔 Jollibee Yumburger Reward", "cost": 250, "desc": "Claim a real-world Jollibee hamburger snack ordered by Tatay."},
@@ -343,39 +332,170 @@ with tab_vault:
             st.caption(item_meta['desc'])
             st.write("---")
             
-            # Check affordability rules
             if current_gold_balance >= item_meta['cost']:
                 if st.button(f"🛒 Purchase Quest Reward", key=f"buy_{item_id}"):
-                    # Deduct balance sheets
                     new_deducted_gold = current_gold_balance - item_meta['cost']
                     char_stats['gold'] = new_deducted_gold
                     
-                    # Log claims timestamps records profiles
                     claim_entry = {
+                        "claim_id": f"claim_{int(datetime.datetime.now().timestamp())}",
                         "item_id": item_id,
                         "item_name": item_meta['name'],
-                        "claimed_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S")
+                        "claimed_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "status": "Pending"
                     }
                     db_claims.append(claim_entry)
                     
-                    # Push deduction transactions payload back to database row updates
                     try:
                         supabase.table("weekly_packages").update({
                             "character_stats": char_stats,
                             "claimed_rewards": db_claims
                         }).eq("week_starting_date", str(current_sunday)).execute()
                         
-                        st.success(f"🎉 Successfully unlocked: {item_meta['name']}! Show this screen to Tatay to redeem your prize.")
+                        st.success(f"🎉 Unlocked: {item_meta['name']}! Notified Tatay.")
                         st.balloons()
                         st.rerun()
                     except Exception:
-                        st.error("⚠️ Transaction pipeline error during bank write phase.")
+                        st.error("⚠️ Transaction pipeline write failure.")
             else:
-                st.button("🔒 Locked (Insufficient Gold Tokens)", disabled=True, key=f"lock_{item_id}")
+                st.button("🔒 Locked (Insufficient Gold)", disabled=True, key=f"lock_{item_id}")
 
-    # RENDER PERMANENT REDEMPTION HISTORY LOGS
     if db_claims:
         st.markdown("---")
-        st.subheader("📜 Character Purchase History Logs (Show to Tatay to Redeem)")
+        st.subheader("📜 Character Purchase History Logs")
         for claim in reversed(db_claims):
-            st.info(f"✨ **{claim['item_name']}** — Unlocked on `{claim['claimed_at']}` | Status: *Ready for Tatay to fulfill*")
+            status_symbol = "⏳" if claim.get("status", "Pending") == "Pending" else "✅"
+            status_text = "Pending Fulfillment" if claim.get("status", "Pending") == "Pending" else "Fulfilling Completed"
+            
+            if claim.get("status", "Pending") == "Pending":
+                st.info(f"{status_symbol} **{claim['item_name']}** — Purchased on `{claim['claimed_at']}` | Status: *{status_text}*")
+            else:
+                st.success(f"{status_symbol} **{claim['item_name']}** — Claimed on `{claim['claimed_at']}` | Status: *{status_text}*")
+
+# ----------------------------------------------------
+# TAB C: THE TATAY ADMIN CONTROL PANEL (SECURE)
+# ----------------------------------------------------
+with tab_admin:
+    st.title("🔑 Tatay's Admin Control Panel")
+    
+    # Simple secure PIN entry field
+    admin_pin = st.text_input("Enter Admin Access Key:", type="password", placeholder="••••")
+    
+    # Set your custom secret passkey here (Change this to whatever master PIN you want)
+    if admin_pin == "735819":
+        st.success("🔓 Access Granted. Welcome back, Tatay.")
+        st.markdown("---")
+        
+        adm_col1, adm_col2 = st.columns([1, 1])
+        
+        # --- LEFT PANEL: PROGRESS MONITOR & STATISTICS ---
+        with adm_col1:
+            st.subheader("📊 Campaign Progress Logs")
+            
+            # Aggregate status details
+            total_quests = sum(len(weekly_data.get(day, {})) for day in weekday_map.values())
+            completed_quests = len(db_mastered)
+            
+            col_stat1, col_stat2 = st.columns(2)
+            with col_stat1:
+                st.markdown(f"""
+                <div class='admin-stat'>
+                    <strong>Campaign Completion</strong><br>
+                    <span style='font-size:24px; font-weight:bold;'>{completed_quests} / {total_quests} Quests</span>
+                </div>
+                """, unsafe_allow_html=True)
+            with col_stat2:
+                st.markdown(f"""
+                <div class='admin-stat'>
+                    <strong>Active Level Standing</strong><br>
+                    <span style='font-size:24px; font-weight:bold;'>Level {char_stats.get('level')}</span>
+                </div>
+                """, unsafe_allow_html=True)
+                
+            st.markdown("#### Subject Status Matrix")
+            # Loop over all registered tracking fields to print clear tables summaries
+            matrix_data = []
+            for day_idx, day_name in weekday_map.items():
+                day_subjects = weekly_data.get(day_name, {})
+                for sub_name in day_subjects.keys():
+                    uid = f"{day_name}_{sub_name}"
+                    status = "✅ Mastered" if uid in db_mastered else "❌ Incomplete"
+                    attempts = db_attempts.get(uid, 0)
+                    matrix_data.append({"Day": day_name, "Subject": sub_name, "Status": status, "Attempts": attempts})
+            
+            st.table(matrix_data)
+            
+            # --- EMERGENCY QUEST MANIPULATION / RESETS ---
+            st.markdown("#### 🔧 Quest Override Vault")
+            reset_target = st.selectbox("Select a Quest Module to Reset:", ["-- Choose Target --"] + [f"{m['Day']}_{m['Subject']}" for m in matrix_data])
+            
+            if reset_target != "-- Choose Target --":
+                if st.button("♻️ Force Reset Quest (Allow Retake)"):
+                    if reset_target in db_mastered:
+                        db_mastered.remove(reset_target)
+                    if reset_target in db_attempts:
+                        db_attempts[reset_target] = 0
+                        
+                    try:
+                        supabase.table("weekly_packages").update({
+                            "mastered_quizzes": db_mastered,
+                            "quiz_attempts": db_attempts
+                        }).eq("week_starting_date", str(current_sunday)).execute()
+                        st.success(f"Successfully reset {reset_target}! Refreshing...")
+                        st.rerun()
+                    except Exception:
+                        st.error("Failed to commit override modifications.")
+                        
+        # --- RIGHT PANEL: REWARDS DESK & STATUS EDITOR ---
+        with adm_col2:
+            st.subheader("📥 Rewards Fulfillment Desk")
+            
+            pending_claims = [c for c in db_claims if c.get("status", "Pending") == "Pending"]
+            
+            if not pending_claims:
+                st.info("☀️ No pending item orders requiring fulfillment.")
+            else:
+                for claim in pending_claims:
+                    with st.container():
+                        st.markdown(f"**🎁 Reward Ordered:** `{claim['item_name']}`")
+                        st.caption(f"Purchased on: {claim['claimed_at']}")
+                        
+                        if st.button("✅ Mark as Fulfilled / Handed Over", key=f"ful_{claim['claim_id']}"):
+                            # Update status parameter inside the matching list row dictionary element
+                            for c in db_claims:
+                                if c.get("claim_id") == claim['claim_id']:
+                                    c["status"] = "Fulfilled"
+                                    
+                            try:
+                                supabase.table("weekly_packages").update({
+                                    "claimed_rewards": db_claims
+                                }).eq("week_starting_date", str(current_sunday)).execute()
+                                st.success("Reward stamped as delivered!")
+                                st.rerun()
+                            except Exception:
+                                st.error("Failed to update status column.")
+                    st.markdown("---")
+                    
+            # --- GOD MODE: STATS MODIFIERS PANEL ---
+            st.subheader("🧙‍♂️ Character Stats Modifier (God Mode)")
+            
+            new_level = st.number_input("Character Level:", min_value=1, value=int(char_stats.get('level', 1)))
+            new_xp = st.slider("Experience Points (XP):", min_value=0, max_value=999, value=int(char_stats.get('xp', 0)))
+            new_gold = st.number_input("Gold Tokens Balance:", min_value=0, value=int(char_stats.get('gold', 0)))
+            
+            if st.button("💾 Save Modified Profile Stats"):
+                char_stats['level'] = new_level
+                char_stats['xp'] = new_xp
+                char_stats['gold'] = new_gold
+                
+                try:
+                    supabase.table("weekly_packages").update({
+                        "character_stats": char_stats
+                    }).eq("week_starting_date", str(current_sunday)).execute()
+                    st.success("Character attributes successfully modified!")
+                    st.rerun()
+                except Exception:
+                    st.error("Failed to sync structural profile overrides.")
+                    
+    elif admin_pin != "":
+        st.error("🔒 Incorrect Admin Key. Access Denied.")

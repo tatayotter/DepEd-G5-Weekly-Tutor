@@ -295,6 +295,26 @@ def render_admin_tab(
         matrix_data, db_claims, char_stats,
         on_quest_reset, on_claim_fulfill, on_bounty_grant, on_stats_update
     )
+    
+    # --- PASTE THE NEW CODE HERE ---
+    st.markdown("---")
+    st.subheader("📖 Adventurer's Daily Journal Log Archives")
+    
+    # Read directly from session state
+    current_journal_db = st.session_state.get("db_journal", {})
+    
+    if not current_journal_db:
+        st.info("📭 The character has not committed any daily reflection scrolls for this week.")
+    else:
+        st.caption("Review daily progress submissions chronologically:")
+        # Sort history keys so that the most recent entries are on top
+        for date_key in sorted(current_journal_db.keys(), reverse=True):
+            log = current_journal_db[date_key]
+            with st.expander(f"📜 Entry Scroll: {date_key}", expanded=False):
+                st.markdown(f"**⚔️ Completed Tasks:** {log.get('done_today', 'Not logged')}")
+                st.markdown(f"**🗺️ Upcoming Plans:** {log.get('tomorrow_plan', 'Not logged')}")
+                st.markdown(f"**🐉 Tough Encounters:** {log.get('hardest_challenge', 'Not logged')}")
+                st.markdown(f"**💎 Expressed Gratitude:** *\"{log.get('gratitude', 'Not logged')}\"*")
 
 
 def render_achievements_section(

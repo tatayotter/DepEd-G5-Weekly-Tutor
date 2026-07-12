@@ -536,27 +536,28 @@ with tab_admin:
             # --- EMERGENCY QUEST MANIPULATION / RESETS ---
             st.markdown("#### 🔧 Quest Override Vault")
             
-            # Formats options cleanly so they match your database array identifiers perfectly
-            reset_options = ["-- Choose Target --"] + [f"{m['Day']}_{m['Subject']}" for m in matrix_data]
+            # --- EMERGENCY QUEST MANIPULATION / RESETS ---
+            st.markdown("#### 🔧 Quest Override Vault")
             
-            reset_target = st.selectbox(
-                "Select a Quest Module to Reset:", 
-                options=reset_options,
-                key="admin_quest_reset_dropdown"
-            )
-            
-            if reset_target != "-- Choose Target --":
-                if st.button("♻️ Force Reset Quest (Allow Retake)", key="btn_force_reset_quest_execution"):
-                    
+            # Create a clean form block to isolate widget states during deletion
+            with st.form(key="tatay_quest_override_reset_form"):
+                reset_options = ["-- Choose Target --"] + [f"{m['Day']}_{m['Subject']}" for m in matrix_data]
+                
+                reset_target = st.selectbox(
+                    "Select a Quest Module to Reset:", 
+                    options=reset_options,
+                    key="admin_quest_reset_dropdown"
+                )
+                
+                submit_reset = st.form_submit_button(label="♻️ Force Reset Quest (Allow Retake)")
+                
+                if submit_reset and reset_target != "-- Choose Target --":
                     # 1. Safe extraction check: ensure target exists before attempting removal
                     if reset_target in db_mastered:
                         db_mastered.remove(reset_target)
                     
                     # 2. Reset attempt counter safely from the tracking dictionary
-                    if reset_target in db_attempts:
-                        db_attempts[reset_target] = 0
-                    else:
-                        db_attempts[reset_target] = 0
+                    db_attempts[reset_target] = 0
                         
                     try:
                         # 3. Synchronize your updated tracking structures directly to Supabase
@@ -565,10 +566,12 @@ with tab_admin:
                             "quiz_attempts": db_attempts
                         }).eq("week_starting_date", str(current_sunday)).execute()
                         
-                        # 4. Clear active session cache flags to prevent Streamlit memory mismatch
+                        # 4. Clear active session cache flags entirely to prevent state lockup
                         st.session_state["active_quest_uid"] = None
+                        
+                        # Completely purge any remaining trace keys of this quest from memory
                         for cache_key in list(st.session_state.keys()):
-                            if reset_target in cache_key or "run_" in cache_key:
+                            if "run_" in cache_key or "form_" in cache_key:
                                 del st.session_state[cache_key]
                         
                         st.success(f"Successfully unlocked {reset_target}! Re-syncing dashboard layout...")

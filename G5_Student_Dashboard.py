@@ -515,13 +515,23 @@ with tab_admin:
                     char_stats['gold'] = new_gold
                     
                     try:
+                        # 1. Commit the zeroed values safely to Supabase
                         supabase.table("weekly_packages").update({
                             "character_stats": char_stats
                         }).eq("week_starting_date", str(current_sunday)).execute()
+                        
+                        # 2. Clear out local active navigation states to prevent state mismatches
+                        st.session_state["active_quest_uid"] = None
+                        
+                        # 3. Clean up matching active quiz session keys to match the new zero baseline
+                        for key in list(st.session_state.keys()):
+                            if "run_" in key or "active_" in key:
+                                del st.session_state[key]
+                        
                         st.success("Character attributes successfully modified!")
                         st.rerun()
-                    except Exception:
-                        st.error("Failed to sync structural profile overrides.")
+                    except Exception as e:
+                        st.error(f"Failed to sync structural profile overrides: {str(e)}")
                         
     elif admin_pin != "":
         st.error("🔒 Incorrect Admin Key. Access Denied.")

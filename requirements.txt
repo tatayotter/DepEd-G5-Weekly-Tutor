@@ -1,5 +1,2 @@
-streamlit
-supabase==2.6.0
-postgrest==0.16.5
-gotrue==2.5.2
+supabase>=2.31.0
 pytz

@@ -481,7 +481,7 @@ with tab_vault:
                 st.success(f"{status_symbol} **{claim['item_name']}** — Claimed on `{claim['claimed_at']}` | Status: *{status_text}*")
 
 # ==========================================
-# 🏆 AUTOMATED ACCHIEVEMENTS ENGINE (30 TROPHIES)
+# 🏆 AUTOMATED ACCHIEVEMENTS ENGINE (30 DUAL-REWARD TROPHIES)
 # ==========================================
 st.markdown("---")
 st.markdown("### 🏆 Hero Milestones & Achievements")
@@ -496,47 +496,47 @@ current_gold_stat = char_stats.get('gold', 0)
 total_rewards_claimed = len([c for c in db_claims if c.get('item_id') != 'real_world_achievement_grant'])
 total_tatay_bounties = len([c for c in db_claims if c.get('item_id') == 'real_world_achievement_grant'])
 
-# Master Matrix definitions mapping 30 distinct structural rewards
+# Master Matrix definitions mapping 30 distinct structural rewards with both XP and Gold payouts
 achievement_definitions = [
     # --- LEVEL PROGRESSION PATHS (1 - 6) ---
-    {"id": "lvl_2", "title": "🌱 Novice Squire", "desc": "Ascend and reach Character Level 2.", "points": 50, "condition": current_level_stat >= 2},
-    {"id": "lvl_5", "title": "⚔️ Seasoned Knight", "desc": "Train hard and hit Character Level 5.", "points": 150, "condition": current_level_stat >= 5},
-    {"id": "lvl_10", "title": "🛡️ Guild Champion", "desc": "Cross the threshold to Character Level 10.", "points": 300, "condition": current_level_stat >= 10},
-    {"id": "lvl_15", "title": "👑 Ascended Warlord", "desc": "Unlock elite stats by reaching Character Level 15.", "points": 500, "condition": current_level_stat >= 15},
-    {"id": "lvl_20", "title": "🌌 Immortal Legend", "desc": "Achieve ultimate status at Character Level 20.", "points": 1000, "condition": current_level_stat >= 20},
-    {"id": "lvl_max", "title": "🌟 Demigod of the Realm", "desc": "Break limits to reach Character Level 25 or above.", "points": 1500, "condition": current_level_stat >= 25},
+    {"id": "lvl_2", "title": "🌱 Novice Squire", "desc": "Ascend and reach Character Level 2.", "points": 50, "gold": 25, "condition": current_level_stat >= 2},
+    {"id": "lvl_5", "title": "⚔️ Seasoned Knight", "desc": "Train hard and hit Character Level 5.", "points": 150, "gold": 75, "condition": current_level_stat >= 5},
+    {"id": "lvl_10", "title": "🛡️ Guild Champion", "desc": "Cross the threshold to Character Level 10.", "points": 300, "gold": 150, "condition": current_level_stat >= 10},
+    {"id": "lvl_15", "title": "👑 Ascended Warlord", "desc": "Unlock elite stats by reaching Character Level 15.", "points": 500, "gold": 250, "condition": current_level_stat >= 15},
+    {"id": "lvl_20", "title": "🌌 Immortal Legend", "desc": "Achieve ultimate status at Character Level 20.", "points": 1000, "gold": 500, "condition": current_level_stat >= 20},
+    {"id": "lvl_max", "title": "🌟 Demigod of the Realm", "desc": "Break limits to reach Character Level 25 or above.", "points": 1500, "gold": 750, "condition": current_level_stat >= 25},
 
     # --- QUEST BOARD CAMPAIGNS (7 - 12) ---
-    {"id": "qst_1", "title": "🥇 First Blood Victory", "desc": "Master your very first core quest module card with a perfect score.", "points": 50, "condition": completed_quests_count >= 1},
-    {"id": "qst_3", "title": "📚 Dedicated Learner", "desc": "Successfully clear 3 academic assignment modules.", "points": 100, "condition": completed_quests_count >= 3},
-    {"id": "qst_5", "title": "🦅 Strategic Commander", "desc": "Master 5 tactical quest cards on your map screen.", "points": 200, "condition": completed_quests_count >= 5},
-    {"id": "qst_10", "title": "🎓 Master of Scrolls", "desc": "Build an elite portfolio by mastering 10 total modules.", "points": 400, "condition": completed_quests_count >= 10},
-    {"id": "qst_15", "title": "🧙‍♂️ Grand Archivist", "desc": "Shatter expectations by achieving 15 masteries.", "points": 600, "condition": completed_quests_count >= 15},
-    {"id": "qst_20", "title": "🌋 Campaign Conqueror", "desc": "Completely wipe out 20 quest cards across your boards.", "points": 1200, "condition": completed_quests_count >= 20},
+    {"id": "qst_1", "title": "🥇 First Blood Victory", "desc": "Master your very first core quest module card with a perfect score.", "points": 50, "gold": 50, "condition": completed_quests_count >= 1},
+    {"id": "qst_3", "title": "📚 Dedicated Learner", "desc": "Successfully clear 3 academic assignment modules.", "points": 100, "gold": 50, "condition": completed_quests_count >= 3},
+    {"id": "qst_5", "title": "🦅 Strategic Commander", "desc": "Master 5 tactical quest cards on your map screen.", "points": 200, "gold": 100, "condition": completed_quests_count >= 5},
+    {"id": "qst_10", "title": "🎓 Master of Scrolls", "desc": "Build an elite portfolio by mastering 10 total modules.", "points": 400, "gold": 200, "condition": completed_quests_count >= 10},
+    {"id": "qst_15", "title": "🧙‍♂️ Grand Archivist", "desc": "Shatter expectations by achieving 15 masteries.", "points": 600, "gold": 300, "condition": completed_quests_count >= 15},
+    {"id": "qst_20", "title": "🌋 Campaign Conqueror", "desc": "Completely wipe out 20 quest cards across your boards.", "points": 1200, "gold": 600, "condition": completed_quests_count >= 20},
 
     # --- THE ADVENTURER'S JOURNAL LEDGER (13 - 18) ---
-    {"id": "jrn_1", "title": "✍️ First Entry Scripted", "desc": "Log your first daily reflection entry in the Guild Journal.", "points": 50, "condition": journal_logs_count >= 1},
-    {"id": "jrn_3", "title": "📜 Scribe Apprentice", "desc": "Maintain consistency by logging 3 daily journal scrolls.", "points": 100, "condition": journal_logs_count >= 3},
-    {"id": "jrn_5", "title": "📖 Chronicler of Battles", "desc": "Record your travels for 5 days this week.", "points": 150, "condition": journal_logs_count >= 5},
-    {"id": "jrn_7", "title": "🔥 Perfect Weekly Reflection", "desc": "Log your journal every single day for a solid week (7 entries).", "points": 350, "condition": journal_logs_count >= 7},
-    {"id": "jrn_10", "title": "🦅 Wise Philosopher", "desc": "Amass 10 daily journal entries inside your ledger archive.", "points": 500, "condition": journal_logs_count >= 10},
-    {"id": "jrn_15", "title": "👁️ Absolute Self-Awareness", "desc": "Build an unshakeable logging habit with 15 historic entries.", "points": 800, "condition": journal_logs_count >= 15},
+    {"id": "jrn_1", "title": "✍️ First Entry Scripted", "desc": "Log your first daily reflection entry in the Guild Journal.", "points": 50, "gold": 25, "condition": journal_logs_count >= 1},
+    {"id": "jrn_3", "title": "📜 Scribe Apprentice", "desc": "Maintain consistency by logging 3 daily journal scrolls.", "points": 100, "gold": 50, "condition": journal_logs_count >= 3},
+    {"id": "jrn_5", "title": "📖 Chronicler of Battles", "desc": "Record your travels for 5 days this week.", "points": 150, "gold": 75, "condition": journal_logs_count >= 5},
+    {"id": "jrn_7", "title": "🔥 Perfect Weekly Reflection", "desc": "Log your journal every single day for a solid week (7 entries).", "points": 350, "gold": 200, "condition": journal_logs_count >= 7},
+    {"id": "jrn_10", "title": "🦅 Wise Philosopher", "desc": "Amass 10 daily journal entries inside your ledger archive.", "points": 500, "gold": 250, "condition": journal_logs_count >= 10},
+    {"id": "jrn_15", "title": "👁️ Absolute Self-Awareness", "desc": "Build an unshakeable logging habit with 15 historic entries.", "points": 800, "gold": 400, "condition": journal_logs_count >= 15},
 
     # --- ECONOMIC FORTUNE & GOLD HOARDING (19 - 24) ---
-    {"id": "gld_100", "title": "🪙 Copper Sack", "desc": "Accumulate 100 Gold Coins in your active wallet balance.", "points": 50, "condition": current_gold_stat >= 100},
-    {"id": "gld_300", "title": "💼 Merchant Associate", "desc": "Build up your savings to 300 Gold Coins.", "points": 100, "condition": current_gold_stat >= 300},
-    {"id": "gld_500", "title": "💰 Wealthy Hoarder", "desc": "Cross the massive boundary to 500 Gold Coins.", "points": 200, "condition": current_gold_stat >= 500},
-    {"id": "gld_1000", "title": "💎 Iron Bank Tycoon", "desc": "Amass a fortune of 1,000 active Gold Coins.", "points": 500, "condition": current_gold_stat >= 1000},
-    {"id": "gld_1500", "title": "👑 Golden Sovereign", "desc": "Reach a legendary bank balance of 1,500 Gold Coins.", "points": 800, "condition": current_gold_stat >= 1500},
-    {"id": "gld_2000", "title": "🌌 Infinite Treasury Lock", "desc": "Hold a staggering 2,000 active Gold Coins simultaneously.", "points": 1200, "condition": current_gold_stat >= 2000},
+    {"id": "gld_100", "title": "🪙 Copper Sack", "desc": "Accumulate 100 Gold Coins in your active wallet balance.", "points": 50, "gold": 25, "condition": current_gold_stat >= 100},
+    {"id": "gld_300", "title": "💼 Merchant Associate", "desc": "Build up your savings to 300 Gold Coins.", "points": 100, "gold": 50, "condition": current_gold_stat >= 300},
+    {"id": "gld_500", "title": "💰 Wealthy Hoarder", "desc": "Cross the massive boundary to 500 Gold Coins.", "points": 200, "gold": 100, "condition": current_gold_stat >= 500},
+    {"id": "gld_1000", "title": "💎 Iron Bank Tycoon", "desc": "Amass a fortune of 1,000 active Gold Coins.", "points": 500, "gold": 250, "condition": current_gold_stat >= 1000},
+    {"id": "gld_1500", "title": "👑 Golden Sovereign", "desc": "Reach a legendary bank balance of 1,500 Gold Coins.", "points": 800, "gold": 400, "condition": current_gold_stat >= 1500},
+    {"id": "gld_2000", "title": "🛡️ Infinite Treasury Lock", "desc": "Hold a staggering 2,000 active Gold Coins simultaneously.", "points": 1200, "gold": 600, "condition": current_gold_stat >= 2000},
 
     # --- VAULT CHECKOUTS & TATAY DEEDS (25 - 30) ---
-    {"id": "vlt_1", "title": "🛒 First Luxury Purchase", "desc": "Buy your very first real-world privilege item from the Rewards Vault.", "points": 50, "condition": total_rewards_claimed >= 1},
-    {"id": "vlt_5", "title": "🎮 Entertainment Tycoon", "desc": "Successfully purchase and claim 5 vault reward packages.", "points": 200, "condition": total_rewards_claimed >= 5},
-    {"id": "vlt_10", "title": "🏰 Living the High Life", "desc": "Cash out a total of 10 real-world reward items over your campaign.", "points": 400, "condition": total_rewards_claimed >= 10},
-    {"id": "bnt_1", "title": "✨ Good Deed Noticed", "desc": "Receive your first custom real-world activity bounty grant from Tatay.", "points": 100, "condition": total_tatay_bounties >= 1},
-    {"id": "bnt_3", "title": "💎 Paragon of Behavior", "desc": "Earn 3 separate real-world achievement grants for excellent deeds.", "points": 250, "condition": total_tatay_bounties >= 3},
-    {"id": "bnt_5", "title": "🌟 Golden Child Legend", "desc": "Earn 5 custom honor grants from Tatay for outstanding helpfulness.", "points": 600, "condition": total_tatay_bounties >= 5}
+    {"id": "vlt_1", "title": "🛒 First Luxury Purchase", "desc": "Buy your very first real-world privilege item from the Rewards Vault.", "points": 50, "gold": 25, "condition": total_rewards_claimed >= 1},
+    {"id": "vlt_5", "title": "🎮 Entertainment Tycoon", "desc": "Successfully purchase and claim 5 vault reward packages.", "points": 200, "gold": 100, "condition": total_rewards_claimed >= 5},
+    {"id": "vlt_10", "title": "🏰 Living the High Life", "desc": "Cash out a total of 10 real-world reward items over your campaign.", "points": 400, "gold": 200, "condition": total_rewards_claimed >= 10},
+    {"id": "bnt_1", "title": "✨ Good Deed Noticed", "desc": "Receive your first custom real-world activity bounty grant from Tatay.", "points": 100, "gold": 50, "condition": total_tatay_bounties >= 1},
+    {"id": "bnt_3", "title": "💎 Paragon of Behavior", "desc": "Earn 3 separate real-world achievement grants for excellent deeds.", "points": 250, "gold": 125, "condition": total_tatay_bounties >= 3},
+    {"id": "bnt_5", "title": "🌟 Golden Child Legend", "desc": "Earn 5 custom honor grants from Tatay for outstanding helpfulness.", "points": 600, "gold": 300, "condition": total_tatay_bounties >= 5}
 ]
 
 # Initialize or fix unlocked structure array parameters inside database safely
@@ -556,17 +556,24 @@ for achv in achievement_definitions:
         if achv["id"] not in db_unlocked_achvs:
             db_unlocked_achvs.append(achv["id"])
             
-            # Inject award points directly into his core Character XP
+            # 💎 DUAL REWARD DEPOSIT: Inject both XP and Gold Coins into profile structures
             char_stats['xp'] = char_stats.get('xp', 0) + achv["points"]
+            char_stats['gold'] = char_stats.get('gold', 0) + achv["gold"]
             
-            # Handle standard Level Up processing loops (Every 1000 XP)
-            while char_stats['xp'] >= 1000:
-                char_stats['level'] = char_stats.get('level', 1) + 1
-                char_stats['xp'] -= 1000
-                st.toast(f"👑 LEVEL UP! Achievement unlocked: {achv['title']}!")
+            # Handle the Adaptive Level Progression Engine check formula
+            lvl = char_stats.get('level', 1)
+            while True:
+                xp_threshold_for_next_level = 500 + (lvl * 100)
+                if char_stats['xp'] >= xp_threshold_for_next_level:
+                    char_stats['xp'] -= xp_threshold_for_next_level
+                    lvl += 1
+                    st.toast(f"👑 LEVEL UP! You have ascended to Level {lvl}!")
+                else:
+                    break
+            char_stats['level'] = lvl
                 
             newly_unlocked = True
-            st.success(f"🎉 NEW TROPHY UNLOCKED: {achv['title']}! Added +✨ {achv['points']} XP!")
+            st.success(f"🎉 NEW TROPHY UNLOCKED: {achv['title']}! Awarded +✨ {achv['points']} XP & +🪙 {achv['gold']} Gold!")
 
 # If a milestone is stamped, commit data states upstream to Supabase instantly
 if newly_unlocked:
@@ -587,18 +594,18 @@ for index, achv in enumerate(achievement_definitions):
     with cols_achv[index % 3]:
         if achv["id"] in db_unlocked_achvs:
             st.markdown(f"""
-            <div style="border: 2px solid #deff9a; border-radius: 8px; padding: 12px; background-color: #1a2414; margin-bottom: 12px; min-height: 120px;">
+            <div style="border: 2px solid #deff9a; border-radius: 8px; padding: 12px; background-color: #1a2414; margin-bottom: 12px; min-height: 130px;">
                 <h5 style="margin: 0; color: #deff9a;">{achv['title']}</h5>
                 <p style="font-size: 0.8rem; margin: 5px 0; color: #cccccc; line-height: 1.2;">{achv['desc']}</p>
-                <span style="font-size: 0.75rem; font-weight: bold; color: #deff9a;">✅ +{achv['points']} XP Claimed</span>
+                <span style="font-size: 0.75rem; font-weight: bold; color: #deff9a;">✅ +{achv['points']} XP & +🪙 {achv['gold']} Gold</span>
             </div>
             """, unsafe_allow_html=True)
         else:
             st.markdown(f"""
-            <div style="border: 1px dashed #555555; border-radius: 8px; padding: 12px; background-color: #111111; margin-bottom: 12px; opacity: 0.5; min-height: 120px;">
+            <div style="border: 1px dashed #555555; border-radius: 8px; padding: 12px; background-color: #111111; margin-bottom: 12px; opacity: 0.5; min-height: 130px;">
                 <h5 style="margin: 0; color: #888888;">🔒 Locked Milestone</h5>
                 <p style="font-size: 0.8rem; margin: 5px 0; color: #666666; line-height: 1.2;">{achv['desc']}</p>
-                <span style="font-size: 0.75rem; color: #888888;">🎁 Reward: {achv['points']} XP</span>
+                <span style="font-size: 0.75rem; color: #888888;">🎁 Reward: {achv['points']} XP / 🪙 {achv['gold']} Gold</span>
             </div>
             """, unsafe_allow_html=True)
 

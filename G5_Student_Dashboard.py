@@ -42,12 +42,13 @@ except Exception as db_error:
     st.code(str(db_error))
     st.stop()
 
-# 4. Handle Empty Package States Safely
+# 4. Handle Empty Package States Safely (UPDATED FOR DEBUGGING)
 if not package_data_list:
     st.info(f"✨ Great job checking in! Your study package for the week of **{current_sunday.strftime('%B %d, %Y')}** is currently being prepared. Enjoy your break time!")
+    
+    # ADD THESE TWO LINES TO DEBUG:
+    st.warning(f"🔧 Technical Debug: The app is looking for a row in Supabase where week_starting_date = '{str(current_sunday)}'")
     st.stop()
-
-weekly_data = package_data_list[0]['package_data']
 
 # 5. Map Weekdays to Block Schedule Categories
 weekday_map = {0: "Monday", 1: "Tuesday", 2: "Wednesday", 3: "Thursday"}

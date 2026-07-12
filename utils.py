@@ -524,25 +524,29 @@ def process_new_achievements(
     from config import ACHIEVEMENT_DEFINITIONS
     
     newly_unlocked = []
-    total_achievement_score = 0
-    
     achievement_map = {a["id"]: a for a in ACHIEVEMENT_DEFINITIONS}
     
     for achievement_id, is_met in achievement_conditions.items():
         if is_met:
             achievement = achievement_map.get(achievement_id)
-            if achievement:
-                total_achievement_score += achievement["points"]
+            if achievement and achievement_id not in unlocked_achievements:
+                unlocked_achievements.append(achievement_id)
+                newly_unlocked.append(achievement)
                 
-                if achievement_id not in unlocked_achievements:
-                    unlocked_achievements.append(achievement_id)
-                    newly_unlocked.append(achievement)
-                    
-                    # Apply rewards
-                    char_stats["xp"] = char_stats.get("xp", 0) + achievement["points"]
-                    char_stats["gold"] = char_stats.get("gold", 0) + achievement["gold"]
-                    
-                    # Process level ups
-                    process_level_up(char_stats)
+                # Apply rewards
+                char_stats["xp"] = char_stats.get("xp", 0) + achievement["points"]
+                char_stats["gold"] = char_stats.get("gold", 0) + achievement["gold"]
+                
+                # Process level ups
+                process_level_up(char_stats)
+    
+    # Total score reflects PERMANENTLY unlocked achievements only, so it can
+    # never decrease (e.g. spending gold in the vault must not make a
+    # gold-threshold achievement's points disappear from the total once earned).
+    total_achievement_score = sum(
+        achievement_map[aid]["points"]
+        for aid in unlocked_achievements
+        if aid in achievement_map
+    )
     
     return newly_unlocked, unlocked_achievements, char_stats, total_achievement_score

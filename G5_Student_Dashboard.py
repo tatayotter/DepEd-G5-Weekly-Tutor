@@ -85,19 +85,32 @@ if not day_data:
 
 selected_subject = st.sidebar.selectbox("Choose a Subject", list(day_data.keys()))
 
-# 7. Render Lesson Summary & Dynamic Quiz Form with Anti-Cheat Toggles
+# 7. Render Lesson Summary & Dynamic Quiz Form with Anti-Cheat & Feedback
 if selected_subject:
     subject_data = day_data[selected_subject]
     quiz_data = subject_data.get('quiz', [])
     
-    # Checkbox to handle screen state toggle
-    start_quiz = st.sidebar.checkbox("📝 Ready? Hide Notes & Start Quiz", key=f"toggle_{target_day}_{selected_subject}")
-    st.sidebar.markdown("---")
+    # Initialize session state tracking unique to this specific subject segment
+    quiz_submitted_key = f"submitted_{target_day}_{selected_subject}"
+    if quiz_submitted_key not in st.session_state:
+        st.session_state[quiz_submitted_key] = False
+
+    # Force the sidebar checkbox to stay True if they already unlocked it but haven't finished
+    # This locks them into the quiz view until submission
+    checkbox_key = f"toggle_{target_day}_{selected_subject}"
+    
+    # Anti-Peeking Enforcement: If quiz started but not done, force it to remain active
+    if checkbox_key in st.session_state and st.session_state[checkbox_key] and not st.session_state[quiz_submitted_key]:
+        start_quiz = st.sidebar.checkbox("📝 Ready? Hide Notes & Start Quiz", value=True, disabled=True, key=f"disabled_{checkbox_key}")
+        st.sidebar.caption("🔒 Notes are locked until you submit your answers.")
+    else:
+        start_quiz = st.sidebar.checkbox("📝 Ready? Hide Notes & Start Quiz", key=checkbox_key)
+        st.sidebar.markdown("---")
     
     # Layout State A: Reading Mode (Quiz Hidden, Notes Visible)
     if not start_quiz:
         st.subheader(f"📖 Reviewing: {selected_subject}")
-        st.info("💡 Read through these core concepts carefully. When you are ready to test your memory, check the box in the left sidebar to hide the notes and unlock your quiz!")
+        st.info("💡 Read through these core concepts and concrete examples carefully. When you are ready, check the box in the left sidebar to hide the notes and unlock your quiz!")
         
         clean_markdown = subject_data['summary_markdown'].replace(r'\n', '\n')
         st.markdown(clean_markdown)
@@ -105,11 +118,11 @@ if selected_subject:
     # Layout State B: Testing Mode (Notes Hidden, Quiz Visible)
     else:
         st.subheader(f"🧠 Quiz Time: {selected_subject}")
-        st.warning("🚫 Study notes are hidden. Do your best!")
         
         if not quiz_data:
             st.info("No quiz items found for this specific subject segment.")
         else:
+            # Wrap inputs inside a form component
             with st.form(key=f"secure_quiz_form_{target_day}_{selected_subject}"):
                 user_answers = {}
                 
@@ -119,29 +132,59 @@ if selected_subject:
                         "Select the best option:", 
                         options=q['options'], 
                         key=f"q_{target_day}_{selected_subject}_{i}", 
-                        index=None
+                        index=None,
+                        disabled=st.session_state[quiz_submitted_key] # Lock choices after submission
                     )
                     st.write("---")
                     
-                submit_button = st.form_submit_button(label="Submit Answers")
+                # Hide the submit button if they are already done to prevent double submissions
+                if not st.session_state[quiz_submitted_key]:
+                    submit_button = st.form_submit_button(label="Submit Answers")
+                else:
+                    submit_button = False
+                    st.info("✅ You have completed this quiz. Uncheck the sidebar box if you want to review the study notes again.")
                 
+                # Evaluation Logic Run
                 if submit_button:
-                    score = 0
-                    total = len(quiz_data)
                     unanswered = any(ans is None for ans in user_answers.values())
                     
                     if unanswered:
                         st.warning("⚠️ Please answer all 5 questions before clicking submit.")
                     else:
-                        for i, q in enumerate(quiz_data):
-                            if user_answers[i] == q['correct_answer']:
-                                score += 1
-                        
-                        # Provide Feedback
-                        if score == total:
-                            st.balloons()
-                            st.success(f"🎉 Perfect Score! {score}/{total}. Outstanding retention!")
-                        elif score >= 3:
-                            st.success(f"👍 Good effort! You scored {score}/{total}. Uncheck the sidebar to review the items missed with Tatay.")
-                        else:
-                            st.warning(f"📚 You scored {score}/{total}. Uncheck the sidebar to read over today's core summary points one more time.")
+                        # Mark quiz as officially finished in memory
+                        st.session_state[quiz_submitted_key] = True
+                        st.rerun()
+
+            # Display Results and Targeted Review Feedback right after submission
+            if st.session_state[quiz_submitted_key]:
+                score = 0
+                total = len(quiz_data)
+                wrong_answers = []
+                
+                for i, q in enumerate(quiz_data):
+                    if user_answers[i] == q['correct_answer']:
+                        score += 1
+                    else:
+                        wrong_answers.append({
+                            "num": i + 1,
+                            "question": q['question'],
+                            "your_ans": user_answers[i],
+                            "correct_ans": q['correct_answer']
+                        })
+                
+                # Performance Feedback Header
+                if score == total:
+                    st.balloons()
+                    st.success(f"🎉 Perfect Score! {score}/{total}. Outstanding retention!")
+                elif score >= 3:
+                    st.success(f"👍 Good effort! You scored {score}/{total}. Let's look closely at what to improve:")
+                else:
+                    st.warning(f"📚 You scored {score}/{total}. Let's treat this as an excellent practice run. Review the items below:")
+                
+                # Detailed Wrong Answer Breakdown Loop
+                if wrong_answers:
+                    st.markdown("### 🔍 Reviewing Missed Questions")
+                    for item in wrong_answers:
+                        with st.expander(f"❌ Question {item['num']}: {item['question']}"):
+                            st.write(f"**Your Answer:** `{item['your_ans']}`")
+                            st.write(f"**Correct Answer:** `{item['correct_ans']}`")

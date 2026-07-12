@@ -53,6 +53,12 @@ def main():
     db_claims = row_data["db_claims"]
     db_journal = row_data["db_journal"]
     db_unlocked_achvs = row_data["db_unlocked_achvs"]
+
+    # Seed session state with freshly-loaded DB values so components that
+    # read from session_state (e.g. the admin journal archive) stay in sync
+    # even before any save happens during this session.
+    st.session_state["db_journal"] = db_journal
+    st.session_state["char_stats"] = char_stats
     
     # ==========================================
     # SIDEBAR: Hero Profile & Journal
@@ -60,74 +66,13 @@ def main():
     ui_components.render_hero_profile(char_stats, current_weekday_name)
     
     # Journal save callback
-    def on_journal_submit(journal_inputs):
-    """Callback to handle saving and state refresh."""
-    # ... call business_logic.handle_journal_save ...
-    success = business_logic.handle_journal_save(...)
-    
-    if success:
-        # FORCE REFRESH: Re-load the data from Supabase immediately
-        # so the 'is_first_entry' check in utils.py returns False
-        st.session_state["db_journal"] = business_logic.load_weekly_data(supabase, current_sunday)[0][0].get('journal')
-        st.rerun() 
-    return success
+    def on_journal_submit(journal_entry):
+        """Callback that persists a new journal entry and refreshes session state."""
+        return business_logic.handle_journal_save(
+            supabase, current_sunday, journal_entry, db_journal, char_stats
+        )
 
-# Pass this function to the UI component
-ui_components.render_journal_section(..., on_save_callback=on_journal_submit)
-    
-    # 1. Generate today's date string identifier (e.g., "2026-07-12")
-    date_key = utils.get_journal_date_key()
-    
-    # 2. Check if an entry already exists for today to prevent double rewards
-    # We load db_journal from our active session state tracking array
-    current_journal = st.session_state.get("db_journal", {})
-    
-    if date_key in current_journal:
-        st.sidebar.warning("⚠️ Journal already sealed for today!")
-        return False
-
-    # 3. Append the new input values under today's key
-    current_journal[date_key] = {
-        "done_today": journal_inputs.get("done_today", ""),
-        "tomorrow_plan": journal_inputs.get("tomorrow_plan", ""),
-        "hardest_challenge": journal_inputs.get("hardest_challenge", ""),
-        "gratitude": journal_inputs.get("gratitude", ""),
-        "timestamp": datetime.datetime.now().isoformat()
-    }
-    
-    # 4. Award daily reflection points to the stats dictionary
-    updated_stats = st.session_state.get("char_stats", {}).copy()
-    xp_reward = REWARD_SETTINGS["journal_entry"]["xp"]
-    gold_reward = REWARD_SETTINGS["journal_entry"]["gold"]
-    
-    updated_stats["xp"] = updated_stats.get("xp", 0) + xp_reward
-    updated_stats["gold"] = updated_stats.get("gold", 0) + gold_reward
-    
-    # Manage level up recalculation tracking boundaries
-    import business_logic
-    business_logic.process_level_up(updated_stats)
-    
-    # 5. Commit both blocks together to Supabase
-    try:
-        current_sunday = utils.get_current_sunday()
-        response = supabase.table("weekly_packages").update({
-            "db_journal": current_journal,
-            "character_stats": updated_stats
-        }).eq("week_starting_date", str(current_sunday)).execute()
-        
-        if response.data:
-            # Sync session state so components switch immediately to read-only view
-            st.session_state["db_journal"] = current_journal
-            st.session_state["char_stats"] = updated_stats
-            return True
-        else:
-            return False
-            
-    except Exception as e:
-        st.error(f"Supabase Sync Error: {str(e)}")
-        return False
-    
-    ui_components.render_journal_section(db_journal, char_stats, current_sunday, on_journal_save)
+    ui_components.render_journal_section(db_journal, char_stats, current_sunday, on_journal_submit)
     ui_components.render_sidebar_navigation(st.session_state)
     
     # ==========================================

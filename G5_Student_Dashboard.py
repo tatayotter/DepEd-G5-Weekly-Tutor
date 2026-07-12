@@ -9,16 +9,45 @@ st.set_page_config(
     initial_sidebar_state="expanded"
 )
 
-# 1. Initialize Direct Supabase Connection via Streamlit Secrets
+# ==========================================
+# 1. Initialize Direct Supabase Connection (BULLETPROOF MULTI-PATH ENGINE)
+# ==========================================
+url = None
+key = None
+
+# Attempt A: Check nested [connections][supabase] dictionary table structure first
 try:
-    # Pulling directly from the TOML header block you set up
     url = st.secrets["connections"]["supabase"]["supabase_url"]
     key = st.secrets["connections"]["supabase"]["supabase_key"]
-    supabase: Client = create_client(url, key)
-except Exception as conn_error:
+except Exception:
+    pass
+
+# Attempt B: Check flat text string root configurations secondary lookup matrix
+if not url or not key:
+    try:
+        url = st.secrets.get("SUPABASE_URL") or st.secrets.get("supabase_url")
+        key = st.secrets.get("SUPABASE_KEY") or st.secrets.get("supabase_key")
+    except Exception:
+        pass
+
+# Final Client Verification & Generation Frame
+if url and key:
+    try:
+        # Clear out any potential trailing slashes that cause deep library PostgREST crashes
+        url = url.strip().rstrip("/")
+        key = key.strip()
+        
+        supabase: Client = create_client(url, key)
+    except Exception as initialization_err:
+        st.error(f"🔒 Supabase Client Handshake Failed: {str(initialization_err)}")
+        st.stop()
+else:
     st.error("🔒 Secrets Configuration Error: Could not read credentials.")
-    st.info("💡 **Tatay's Admin Tip:** Ensure your Streamlit Cloud Secrets text box contains the exact fields required.")
-    st.code(str(conn_error))
+    st.info("💡 **Tatay's Admin Tip:** If the app hit this fallback wall, go to your Streamlit Cloud Secrets text box panel and append these direct root variables at the very top of the box to bypass dictionary parsing bugs:")
+    st.code("""
+supabase_url = "https://your-project-id.supabase.co"
+supabase_key = "your-long-anon-public-key-here"
+    """)
     st.stop()
 
 st.title("🎓 Grade 5 Daily Learning Dashboard")

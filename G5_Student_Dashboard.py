@@ -59,22 +59,24 @@ else:
     else:
         weekly_data = raw_data
 
-# 5. Map Weekdays to Block Schedule Categories
-weekday_map = {0: "Monday", 1: "Tuesday", 2: "Wednesday", 3: "Thursday"}
-current_weekday_idx = today.weekday()
+# ==========================================
+# 5. Choose Day to Review (Ensure variable is named selected_day)
+# ==========================================
+# Look closely at your script here—make sure this variable is named exactly 'selected_day'
+selected_day = st.sidebar.selectbox(
+    "📆 Choose Day to Review",
+    options=["Monday", "Tuesday", "Wednesday", "Thursday"]
+)
 
-st.sidebar.header("🕹️ Control Panel")
+# Fetch data for that day from your JSON payload
+day_data = weekly_data.get(selected_day, {})
 
-if current_weekday_idx in weekday_map:
-    target_day = weekday_map[current_weekday_idx]
-    st.sidebar.success(f"%s Today is {target_day}" % "📆")
-else:
-    st.sidebar.info("🏡 Weekend / General Review Mode")
-    target_day = st.sidebar.selectbox("Choose Day to Review", list(weekday_map.values()))
 
+# ==========================================
 # 6. Dynamic Subject Selection with "✅ DONE" Labels
+# ==========================================
 selected_subject = None
-if selected_day and day_data:
+if selected_day and day_data:  # This will now execute flawlessly
     # Pull current mastered list from database payload
     row_data = package_data_list[0] if package_data_list else {}
     db_mastered = row_data.get('mastered_quizzes', [])
@@ -83,7 +85,7 @@ if selected_day and day_data:
 
     # Build a clean mapping list of display labels
     subject_options = []
-    subject_mapping = {} # Maps display text back to the clean subject name
+    subject_mapping = {}
 
     for sub in day_data.keys():
         subject_uid = f"{selected_day}_{sub}"

@@ -85,19 +85,21 @@ if not day_data:
 
 selected_subject = st.sidebar.selectbox("Choose a Subject", list(day_data.keys()))
 
-# 7. Render Lesson Summary & Dynamic Quiz Form with Fixed Memory Logic
+# 7. Render Lesson Summary & Dynamic Quiz Form with Attempt Tracking & Anti-Cheat
 if selected_subject:
     subject_data = day_data[selected_subject]
     quiz_data = subject_data.get('quiz', [])
     
-    # Define distinct, persistent state keys
-    quiz_active_key = f"active_{target_day}_{selected_subject}"
-    submitted_key = f"submitted_{target_day}_{selected_subject}"
-    score_key = f"score_{target_day}_{selected_subject}"
-    feedback_key = f"feedback_{target_day}_{selected_subject}"
-    saved_answers_key = f"saved_answers_{target_day}_{selected_subject}"
+    # Define unique tracking keys
+    subject_uid = f"{target_day}_{selected_subject}"
+    quiz_active_key = f"active_{subject_uid}"
+    submitted_key = f"submitted_{subject_uid}"
+    score_key = f"score_{subject_uid}"
+    feedback_key = f"feedback_{subject_uid}"
+    saved_answers_key = f"saved_answers_{subject_uid}"
+    attempt_count_key = f"attempts_{subject_uid}"
     
-    # Initialize keys if missing from session state
+    # Initialize session states
     if quiz_active_key not in st.session_state:
         st.session_state[quiz_active_key] = False
     if submitted_key not in st.session_state:
@@ -105,15 +107,26 @@ if selected_subject:
         st.session_state[score_key] = 0
         st.session_state[feedback_key] = []
         st.session_state[saved_answers_key] = {}
+        st.session_state[attempt_count_key] = 0
+
+    # Pull current saved attempts matrix directly from the database row payload
+    db_attempts = package_data_list[0].get('quiz_attempts', {}) if package_data_list else {}
+    if not isinstance(db_attempts, dict):
+        db_attempts = {}
+    
+    # Sync database history into current active viewing memory session if not set yet
+    if st.session_state[attempt_count_key] == 0:
+        st.session_state[attempt_count_key] = db_attempts.get(subject_uid, 0)
 
     # Sidebar Controller Layout
     st.sidebar.markdown("### 🕹️ Quiz Status")
+    st.sidebar.metric(label="🔢 Attempts Made", value=st.session_state[attempt_count_key])
     
     if st.session_state[submitted_key]:
         st.sidebar.success("✅ Quiz Completed!")
         if st.sidebar.button("🔓 Open Study Notes Again"):
             st.session_state[quiz_active_key] = False
-            st.session_state[submitted_key] = False  # Reset for clean slate
+            st.session_state[submitted_key] = False  
             st.rerun()
     elif st.session_state[quiz_active_key]:
         st.sidebar.warning("🔒 Quiz In Progress...")
@@ -125,8 +138,6 @@ if selected_subject:
             
     st.sidebar.markdown("---")
 
-    # SCREEN ROUTING LOGIC (Using strict memory states instead of UI variables)
-    
     # LAYOUT A: Reading Mode
     if not st.session_state[quiz_active_key] and not st.session_state[submitted_key]:
         st.subheader(f"📖 Reviewing: {selected_subject}")
@@ -142,15 +153,11 @@ if selected_subject:
         if not quiz_data:
             st.info("No quiz items found for this specific subject segment.")
         else:
-            # Main Interactive Evaluation Frame
             with st.container():
                 user_answers = {}
-                
-                # Loop through all 5 items
                 for i, q in enumerate(quiz_data):
                     st.write(f"**Q{i+1}: {q['question']}**")
                     
-                    # Lock input index if submitted, otherwise leave blank
                     default_idx = None
                     if st.session_state[submitted_key]:
                         saved_val = st.session_state[saved_answers_key].get(i)
@@ -166,51 +173,69 @@ if selected_subject:
                     )
                     st.write("---")
                 
-                # Bottom Action Button Handling
                 if not st.session_state[submitted_key]:
-                    if st.button("🚀 Submit Final Answers"):
-                        unanswered = any(ans is None for ans in user_answers.values())
+                    submit_button = st.button("🚀 Submit Final Answers")
+                else:
+                    submit_button = False
+                    st.info("✅ You have completed this quiz. Uncheck the sidebar box if you want to review the study notes again.")
+                
+                if submit_button:
+                    unanswered = any(ans is None for ans in user_answers.values())
+                    
+                    if unanswered:
+                        st.warning("⚠️ Please select an answer for all questions before submitting.")
+                    else:
+                        score = 0
+                        wrong_items = []
                         
-                        if unanswered:
-                            st.warning("⚠️ Please select an answer for all 5 questions before submitting.")
-                        else:
-                            score = 0
-                            wrong_items = []
-                            
-                            for i, q in enumerate(quiz_data):
-                                if user_answers[i] == q['correct_answer']:
-                                    score += 1
-                                else:
-                                    wrong_items.append({
-                                        "num": i + 1,
-                                        "question": q['question'],
-                                        "your_ans": user_answers[i],
-                                        "correct_ans": q['correct_answer']
-                                    })
-                            
-                            # Lock values directly into persistent memory matrices
-                            st.session_state[score_key] = score
-                            st.session_state[feedback_key] = wrong_items
-                            st.session_state[saved_answers_key] = user_answers
-                            st.session_state[submitted_key] = True
-                            st.rerun()
+                        for i, q in enumerate(quiz_data):
+                            if user_answers[i] == q['correct_answer']:
+                                score += 1
+                            else:
+                                wrong_items.append({
+                                    "num": i + 1,
+                                    "question": q['question'],
+                                    "your_ans": user_answers[i],
+                                    "correct_ans": q['correct_answer']
+                                })
+                        
+                        # Increment attempt counter locally
+                        st.session_state[attempt_count_key] += 1
+                        
+                        # Update the tracking history in Supabase immediately
+                        db_attempts[subject_uid] = st.session_state[attempt_count_key]
+                        try:
+                            supabase.table("weekly_packages")\
+                                .update({"quiz_attempts": db_attempts})\
+                                .eq("week_starting_date", str(current_sunday))\
+                                .execute()
+                        except Exception as upload_err:
+                            st.sidebar.error("⚠️ Failed to log attempt data to cloud.")
+                        
+                        # Save score results to session state
+                        st.session_state[score_key] = score
+                        st.session_state[feedback_key] = wrong_items
+                        st.session_state[saved_answers_key] = user_answers
+                        st.session_state[submitted_key] = True
+                        st.rerun()
 
             # PERSISTENT SCORE & FEEDBACK VIEW PANEL
             if st.session_state[submitted_key]:
                 final_score = st.session_state[score_key]
                 total_q = len(quiz_data)
                 missed_list = st.session_state[feedback_key]
+                attempts_taken = st.session_state[attempt_count_key]
                 
                 st.markdown("### 📊 Your Results Breakdown")
                 if final_score == total_q:
                     st.balloons()
-                    st.success(f"🎉 Perfect Score! {final_score}/{total_q}. Outstanding retention!")
+                    st.success(f"🏆 **Perfect Score! {final_score}/{total_q}**")
+                    st.info(f"✨ It took exactly **{attempts_taken}** {'attempt' if attempts_taken == 1 else 'attempts'} to master this topic and get a perfect score!")
                 elif final_score >= 3:
-                    st.success(f"👍 Good effort! You scored {final_score}/{total_q}. Review the items missed below:")
+                    st.success(f"👍 Good effort! You scored {final_score}/{total_q}. Review your mistakes below and try again to hit mastery!")
                 else:
-                    st.warning(f"📚 You scored {final_score}/{total_q}. Let's read back through the lesson points after checking your answers below.")
+                    st.warning(f"📚 You scored {final_score}/{total_q}. Let's re-read the study material before giving it another shot.")
                 
-                # Dynamic Expander List for Wrong Options
                 if missed_list:
                     st.markdown("#### 🔍 Reviewing Missed Questions")
                     for item in missed_list:

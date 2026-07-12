@@ -177,46 +177,45 @@ with st.sidebar.expander("✍️ Open Daily Journal Scroll", expanded=journal_da
     )
     
     if st.button("💾 Seal Journal Entry", key="btn_sb_save_daily_journal"):
-    is_first_entry_today = journal_date_str not in db_journal
-    
-    # Build payload schema dictionary
-    db_journal[journal_date_str] = {
-        "done_today": j_done.strip(),
-        "tomorrow_plan": j_tomorrow.strip(),
-        "hardest_challenge": j_challenge.strip(),
-        "gratitude": j_gratitude.strip()
-    }
-    
-    # Process rewards only on the initial daily creation loop
-    if is_first_entry_today:
-        char_stats['gold'] = char_stats.get('gold', 0) + 50
-        char_stats['xp'] = char_stats.get('xp', 0) + 50
-        
-        # 📊 ADAPTIVE LEVEL PROGRESSION ENGINE
-        # Scales requirements smoothly based on current level
-        lvl = char_stats.get('level', 1)
-        while True:
-            xp_threshold_for_next_level = 500 + (lvl * 100)
-            if char_stats['xp'] >= xp_threshold_for_next_level:
-                char_stats['xp'] -= xp_threshold_for_next_level
-                lvl += 1
-                st.toast(f"👑 LEVEL UP! You have ascended to Level {lvl}!")
-            else:
-                break
-        char_stats['level'] = lvl
-    
-    try:
-        # 🛠️ Fixed column name from "journal_logs" to "journal" to align with database column schema
-        supabase.table("weekly_packages").update({
-            "journal": db_journal,
-            "character_stats": char_stats
-        }).eq("week_starting_date", str(current_sunday)).execute()
-        
-        st.sidebar.success("Journal saved successfully!")
-        st.balloons()
-        st.rerun()
-    except Exception as je:
-        st.sidebar.error(f"Failed to sync logs: {str(je)}")
+            is_first_entry_today = journal_date_str not in db_journal
+            
+            # Build payload schema dictionary
+            db_journal[journal_date_str] = {
+                "done_today": j_done.strip(),
+                "tomorrow_plan": j_tomorrow.strip(),
+                "hardest_challenge": j_challenge.strip(),
+                "gratitude": j_gratitude.strip()
+            }
+            
+            # Process rewards only on the initial daily creation loop
+            if is_first_entry_today:
+                char_stats['gold'] = char_stats.get('gold', 0) + 50
+                char_stats['xp'] = char_stats.get('xp', 0) + 50
+                
+                # 📊 ADAPTIVE LEVEL PROGRESSION ENGINE
+                lvl = char_stats.get('level', 1)
+                while True:
+                    xp_threshold_for_next_level = 500 + (lvl * 100)
+                    if char_stats['xp'] >= xp_threshold_for_next_level:
+                        char_stats['xp'] -= xp_threshold_for_next_level
+                        lvl += 1
+                        st.toast(f"👑 LEVEL UP! You have ascended to Level {lvl}!")
+                    else:
+                        break
+                char_stats['level'] = lvl
+            
+            try:
+                # Commit both variables securely to Supabase
+                supabase.table("weekly_packages").update({
+                    "journal": db_journal,
+                    "character_stats": char_stats
+                }).eq("week_starting_date", str(current_sunday)).execute()
+                
+                st.sidebar.success("Journal saved successfully!")
+                st.balloons()
+                st.rerun()
+            except Exception as je:
+                st.sidebar.error(f"Failed to sync logs: {str(je)}")
 
 st.sidebar.markdown("---")
 

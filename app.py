@@ -60,10 +60,62 @@ def main():
     ui_components.render_hero_profile(char_stats, current_weekday_name)
     
     # Journal save callback
-    def on_journal_save(journal_entry):
-        return business_logic.handle_journal_save(
-            supabase, current_sunday, journal_entry, db_journal, char_stats
-        )
+    def on_journal_save(journal_inputs: dict):
+    """Callback triggered when the student seals their daily journal."""
+    import utils
+    from config import REWARD_SETTINGS
+    
+    # 1. Generate today's date string identifier (e.g., "2026-07-12")
+    date_key = utils.get_journal_date_key()
+    
+    # 2. Check if an entry already exists for today to prevent double rewards
+    # We load db_journal from our active session state tracking array
+    current_journal = st.session_state.get("db_journal", {})
+    
+    if date_key in current_journal:
+        st.sidebar.warning("⚠️ Journal already sealed for today!")
+        return False
+
+    # 3. Append the new input values under today's key
+    current_journal[date_key] = {
+        "done_today": journal_inputs.get("done_today", ""),
+        "tomorrow_plan": journal_inputs.get("tomorrow_plan", ""),
+        "hardest_challenge": journal_inputs.get("hardest_challenge", ""),
+        "gratitude": journal_inputs.get("gratitude", ""),
+        "timestamp": datetime.datetime.now().isoformat()
+    }
+    
+    # 4. Award daily reflection points to the stats dictionary
+    updated_stats = st.session_state.get("char_stats", {}).copy()
+    xp_reward = REWARD_SETTINGS["journal_entry"]["xp"]
+    gold_reward = REWARD_SETTINGS["journal_entry"]["gold"]
+    
+    updated_stats["xp"] = updated_stats.get("xp", 0) + xp_reward
+    updated_stats["gold"] = updated_stats.get("gold", 0) + gold_reward
+    
+    # Manage level up recalculation tracking boundaries
+    import business_logic
+    business_logic.process_level_up(updated_stats)
+    
+    # 5. Commit both blocks together to Supabase
+    try:
+        current_sunday = utils.get_current_sunday()
+        response = supabase.table("weekly_packages").update({
+            "db_journal": current_journal,
+            "character_stats": updated_stats
+        }).eq("week_starting_date", str(current_sunday)).execute()
+        
+        if response.data:
+            # Sync session state so components switch immediately to read-only view
+            st.session_state["db_journal"] = current_journal
+            st.session_state["char_stats"] = updated_stats
+            return True
+        else:
+            return False
+            
+    except Exception as e:
+        st.error(f"Supabase Sync Error: {str(e)}")
+        return False
     
     ui_components.render_journal_section(db_journal, char_stats, current_sunday, on_journal_save)
     ui_components.render_sidebar_navigation(st.session_state)

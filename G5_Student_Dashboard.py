@@ -85,7 +85,7 @@ if not day_data:
 
 selected_subject = st.sidebar.selectbox("Choose a Subject", list(day_data.keys()))
 
-# 7. Render Lesson Summary & Gamified Dynamic Quiz Form
+# 7. Render Lesson Summary & Gamified Dynamic Quiz Form (WITH LOCKOUT & REWARD SYNC)
 if selected_subject:
     subject_data = day_data[selected_subject]
     quiz_data = subject_data.get('quiz', [])
@@ -98,6 +98,7 @@ if selected_subject:
     feedback_key = f"feedback_{subject_uid}"
     saved_answers_key = f"saved_answers_{subject_uid}"
     attempt_count_key = f"attempts_{subject_uid}"
+    mastered_key = f"mastered_{subject_uid}" # Permanent mastery flag
     
     # Initialize basic quiz session states
     if quiz_active_key not in st.session_state:
@@ -109,7 +110,7 @@ if selected_subject:
         st.session_state[saved_answers_key] = {}
         st.session_state[attempt_count_key] = 0
 
-    # 🎮 Fetch Character Stats from the current week's row
+    # 🎮 Fetch fresh state historical data directly from database rows
     row_data = package_data_list[0] if package_data_list else {}
     char_stats = row_data.get('character_stats', {"level": 1, "xp": 0, "gold": 0})
     if not isinstance(char_stats, dict):
@@ -119,25 +120,37 @@ if selected_subject:
     if not isinstance(db_attempts, dict):
         db_attempts = {}
 
-    # Sync attempts database state to active local viewing session memory
+    # Check if this specific subject was already marked mastered in Supabase previously
+    # Stored as an array or object of mastered topics to prevent replay exploits
+    db_mastered = row_data.get('mastered_quizzes', [])
+    if not isinstance(db_mastered, list):
+        db_mastered = []
+    
+    is_already_mastered = subject_uid in db_mastered
+
+    # Sync attempts state to local active session
     if st.session_state[attempt_count_key] == 0:
         st.session_state[attempt_count_key] = db_attempts.get(subject_uid, 0)
 
-    # 🎮 Render Character Sheet Widget inside the Sidebar
+    # 🎮 Render Character Sheet Widget inside the Sidebar (Using Live Database Values)
     st.sidebar.markdown("### 🛡️ Character Sheet")
     col_lvl, col_xp, col_gld = st.sidebar.columns(3)
     col_lvl.metric("Level", f"Lvl {char_stats.get('level', 1)}")
     col_xp.metric("XP", f"{char_stats.get('xp', 0)} / 1000")
     col_gld.metric("Gold", f"🪙 {char_stats.get('gold', 0)}")
     
-    # Progress bar showing how close he is to leveling up (Assuming 1000 XP per level)
-    current_xp = char_stats.get('xp', 0)
-    st.sidebar.progress(min(current_xp / 1000, 1.0))
+    st.sidebar.progress(min(char_stats.get('xp', 0) / 1000, 1.0))
     st.sidebar.markdown(f"🔢 Attempts Made for this subject: **{st.session_state[attempt_count_key]}**")
     st.sidebar.markdown("---")
 
-    # Quiz Control Actions
-    if st.session_state[submitted_key]:
+    # Quiz Control Actions with Mastery Lockout Rules
+    st.sidebar.markdown("### 🕹️ Quiz Status")
+    if is_already_mastered:
+        st.sidebar.success("🏆 Topic Mastered!")
+        st.sidebar.caption("You earned maximum gold and XP from this quest already!")
+        # Force states off to prevent screen entry leaks
+        st.session_state[quiz_active_key] = False 
+    elif st.session_state[submitted_key]:
         st.sidebar.success("✅ Evaluation Complete!")
         if st.sidebar.button("🔓 Open Study Notes Again"):
             st.session_state[quiz_active_key] = False
@@ -146,21 +159,26 @@ if selected_subject:
     elif st.session_state[quiz_active_key]:
         st.sidebar.warning("🔒 Testing Mode Active")
     else:
-        if st.sidebar.button("📝 Hide Notes & Start Quiz"):
+        if st.sidebar.button("⚔️ Start Quest (Hide Notes)"):
             st.session_state[quiz_active_key] = True
             st.rerun()
+            
+    st.sidebar.markdown("---")
 
     # SCREEN ACTION ROUTER
     
-    # LAYOUT A: Reading / Study Mode
-    if not st.session_state[quiz_active_key] and not st.session_state[submitted_key]:
+    # LAYOUT A: Reading / Study Mode (Or View Mastered Mode)
+    if is_already_mastered or (not st.session_state[quiz_active_key] and not st.session_state[submitted_key]):
         st.subheader(f"📖 Reviewing: {selected_subject}")
-        st.info("💡 Read through these core concepts carefully. When you are ready to earn rewards, hit the sidebar button to lock the notes and start your quest!")
+        if is_already_mastered:
+            st.warning("✨ You have already unlocked a perfect score on this subject challenge! The quest is complete, but you can read through the summary details below as many times as you like to review.")
+        else:
+            st.info("💡 Read through these core concepts carefully. When you are ready to earn rewards, hit the sidebar button to lock the notes and start your quest!")
         
         clean_markdown = subject_data['summary_markdown'].replace(r'\n', '\n')
         st.markdown(clean_markdown)
         
-    # LAYOUT B: Testing Mode
+    # LAYOUT B: Active Testing Mode
     else:
         st.subheader(f"⚔️ Active Quest: {selected_subject} Challenge")
         
@@ -211,33 +229,28 @@ if selected_subject:
                                     "correct_ans": q['correct_answer']
                                 })
                         
-                        # Increment active local attempt memory index
                         st.session_state[attempt_count_key] += 1
                         db_attempts[subject_uid] = st.session_state[attempt_count_key]
                         
-                        # 🎮 GAMIFICATION REWARDS LOGIC (Triggered on Perfect 5/5 Score)
                         level_up_occurred = False
                         xp_earned = 0
                         gold_earned = 0
                         
-                        if score == len(quiz_data):
-                            # Base Rewards
+                        # Process rewards ONLY if they hit 5/5 and haven't mastered it before
+                        if score == len(quiz_data) and not is_already_mastered:
                             xp_earned = 200
                             gold_earned = 50
                             
-                            # Speed Mastery Bonus: Extra loot if cleared in few attempts
                             if st.session_state[attempt_count_key] == 1:
                                 xp_earned += 100
-                                gold_earned += 25  # First-try flawless bonus
+                                gold_earned += 25  
                             elif st.session_state[attempt_count_key] == 2:
                                 xp_earned += 50
                             
-                            # Update stats payload dictionary
                             new_xp = char_stats.get('xp', 0) + xp_earned
                             new_gold = char_stats.get('gold', 0) + gold_earned
                             current_level = char_stats.get('level', 1)
                             
-                            # Check Level Up Barrier (Every 1000 XP triggers a new level)
                             if new_xp >= 1000:
                                 current_level += 1
                                 new_xp = new_xp - 1000
@@ -247,31 +260,36 @@ if selected_subject:
                             char_stats['gold'] = new_gold
                             char_stats['level'] = current_level
                             
-                            # Cache level-up flag inside current execution run session state memory
+                            # Append to permanent mastery list arrays to block exploit loops
+                            db_mastered.append(subject_uid)
+                            
                             st.session_state[f"levelup_{subject_uid}"] = level_up_occurred
                             st.session_state[f"loot_xp_{subject_uid}"] = xp_earned
                             st.session_state[f"loot_gold_{subject_uid}"] = gold_earned
                         
-                        # Save both attempts and RPG character sheets back to Supabase simultaneously
+                        # Save updates immediately to Supabase
                         try:
                             supabase.table("weekly_packages")\
                                 .update({
                                     "quiz_attempts": db_attempts,
-                                    "character_stats": char_stats
+                                    "character_stats": char_stats,
+                                    "mastered_quizzes": db_mastered # Save mastery lookup index list
                                 })\
                                 .eq("week_starting_date", str(current_sunday))\
                                 .execute()
                         except Exception as upload_err:
-                            st.sidebar.error("⚠️ Failed to write rewards to cloud database database.")
+                            st.sidebar.error("⚠️ Failed to write rewards to cloud database.")
                         
-                        # Save score logic data states
                         st.session_state[score_key] = score
                         st.session_state[feedback_key] = wrong_items
                         st.session_state[saved_answers_key] = user_answers
                         st.session_state[submitted_key] = True
+                        
+                        # CRITICAL: Rerun forces the whole script to reload instantly,
+                        # matching the database changes up to the sidebar display!
                         st.rerun()
 
-            # PERSISTENT SCORE, LOOT BREAKDOWN, & CORRECTION OVERLAY PANEL
+            # PERSISTENT SCORE VIEW PANEL
             if st.session_state[submitted_key]:
                 final_score = st.session_state[score_key]
                 total_q = len(quiz_data)
@@ -280,21 +298,17 @@ if selected_subject:
                 st.markdown("### 📊 Quest Summary")
                 
                 if final_score == total_q:
-                    # Check for level up alert flags
                     if st.session_state.get(f"levelup_{subject_uid}", False):
-                        st.balloons()
-                        st.success(f"👑 **LEVEL UP! You reached Level {char_stats.get('level')}!** Outstanding growth!")
+                        st.success(f"👑 **LEVEL UP! You reached Level {char_stats.get('level')}!**")
                     else:
-                        st.balloons()
                         st.success(f"🎉 **Perfect Mastery! Score: {final_score}/{total_q}**")
                     
-                    # Display Loot Drops
                     xp_got = st.session_state.get(f"loot_xp_{subject_uid}", 200)
                     gold_got = st.session_state.get(f"loot_gold_{subject_uid}", 50)
                     
                     st.markdown(f"""
                     ### 🎁 Quest Loot Awarded:
-                    * **✨ Experience:** `+{xp_got} XP` {'🚀 (Includes First-Try Flawless Bonus!)' if xp_got == 300 else ''}
+                    * **✨ Experience:** `+{xp_got} XP`
                     * **🪙 Gold Tokens:** `+{gold_got} Gold`
                     """)
                 elif final_score >= 3:
@@ -302,7 +316,6 @@ if selected_subject:
                 else:
                     st.warning(f"📚 You scored {final_score}/{total_q}. Let's re-read the study material closely before your next challenge attempt.")
                 
-                # Correction Expanders
                 if missed_list:
                     st.markdown("#### 🔍 Quest Logs: Missed Targets")
                     for item in missed_list:

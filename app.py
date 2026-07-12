@@ -92,6 +92,12 @@ def main():
             supabase, current_sunday, weekly_data, db_mastered,
             db_attempts, current_weekday_name, char_stats
         )
+        
+        # Achievements Display (Quest Board tab only)
+        render_achievements_section(
+            supabase, current_sunday, char_stats, db_mastered,
+            db_journal, db_claims, db_unlocked_achvs
+        )
     
     # ==========================================
     # TAB 2: Rewards Vault
@@ -107,14 +113,6 @@ def main():
             supabase, current_sunday, weekly_data, db_mastered,
             db_attempts, char_stats, db_claims
         )
-    
-    # ==========================================
-    # Achievements Display (Below Tabs)
-    # ==========================================
-    render_achievements_section(
-        supabase, current_sunday, char_stats, db_mastered,
-        db_journal, db_claims, db_unlocked_achvs
-    )
 
 
 def render_quest_board_tab(
@@ -201,10 +199,6 @@ def render_admin_tab(
     if not ui_components.render_admin_authentication():
         return
     
-    # Read directly from session state or your data object
-    # If using row_data, ensure it points to 'journal'
-    current_journal_db = st.session_state.get("db_journal", {})
-    
     # Build quest matrix
     matrix_data = business_logic.build_quest_status_matrix(
         weekly_data, db_mastered, db_attempts
@@ -255,25 +249,9 @@ def render_admin_tab(
         on_quest_reset, on_claim_fulfill, on_bounty_grant, on_stats_update
     )
     
-    # --- PASTE THE NEW CODE HERE ---
-    st.markdown("---")
-    st.subheader("📖 Adventurer's Daily Journal Log Archives")
-    
-    # Read directly from session state
-    current_journal_db = st.session_state.get("db_journal", {})
-    
-    if not current_journal_db:
-        st.info("📭 The character has not committed any daily reflection scrolls for this week.")
-    else:
-        st.caption("Review daily progress submissions chronologically:")
-        # Sort history keys so that the most recent entries are on top
-        for date_key in sorted(current_journal_db.keys(), reverse=True):
-            log = current_journal_db[date_key]
-            with st.expander(f"📜 Entry Scroll: {date_key}", expanded=False):
-                st.markdown(f"**⚔️ Completed Tasks:** {log.get('done_today', 'Not logged')}")
-                st.markdown(f"**🗺️ Upcoming Plans:** {log.get('tomorrow_plan', 'Not logged')}")
-                st.markdown(f"**🐉 Tough Encounters:** {log.get('hardest_challenge', 'Not logged')}")
-                st.markdown(f"**💎 Expressed Gratitude:** *\"{log.get('gratitude', 'Not logged')}\"*")
+    # Journal archive: uses the freshest DB data (seeded into session state
+    # at page load in main(), and refreshed there on every rerun)
+    ui_components.render_journal_archive(st.session_state.get("db_journal", {}))
 
 
 def render_achievements_section(

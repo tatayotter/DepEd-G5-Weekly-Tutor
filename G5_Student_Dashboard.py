@@ -316,13 +316,19 @@ with tab_vault:
     st.markdown("Exchange your earned digital gold tokens for real-world privileges and power-ups.")
     st.markdown("---")
     
+    # Define current catalog profile structures
     vault_catalog = {
         "voucher_30m": {"name": "🎮 30-Min Gaming Voucher", "cost": 100, "desc": "Unlocks 30 minutes of console gaming or modding runtime privileges."},
-        "jollibee_burger": {"name": "🍔 Jollibee Yumburger Reward", "cost": 250, "desc": "Claim a real-world Jollibee hamburger snack ordered by Tatay."},
+        "jollibee_burger": {"name": "🍔 Jollibee Yumburger Reward", "cost": 250, "desc": "Claim a real-world Jollibee hamburger snack ordered by Tatay. (Limit: 1 per week)"},
         "ai_lording": {"name": "🧙‍♂️ 30-Min AI Lording Sandbox", "cost": 150, "desc": "Unlocks 30 minutes of advanced AI prompt mastery using Google Gemini to construct custom worlds and stories."}
     }
     
     current_gold_balance = char_stats.get('gold', 0)
+    
+    # 🔍 SCAN WEEKLY CLAIMS HISTORY FOR THE BURGER LIMIT
+    # Counts how many times 'jollibee_burger' appears in his active week row array
+    burger_claims_this_week = sum(1 for claim in db_claims if claim.get("item_id") == "jollibee_burger")
+    is_burger_locked_by_limit = burger_claims_this_week >= 1
     
     shop_cols = st.columns(3)
     for idx, (item_id, item_meta) in enumerate(vault_catalog.items()):
@@ -332,7 +338,13 @@ with tab_vault:
             st.caption(item_meta['desc'])
             st.write("---")
             
-            if current_gold_balance >= item_meta['cost']:
+            # CONDITION 1: Specific verification check for the weekly Jollibee restriction
+            if item_id == "jollibee_burger" and is_burger_locked_by_limit:
+                st.button("🔒 Locked (Weekly Limit Reached)", disabled=True, key=f"limit_lock_{item_id}")
+                st.caption("⚠️ *You can only unlock 1 Jollibee Yumburger per campaign week.*")
+            
+            # CONDITION 2: Standard balance verification for items that are affordable
+            elif current_gold_balance >= item_meta['cost']:
                 if st.button(f"🛒 Purchase Quest Reward", key=f"buy_{item_id}"):
                     new_deducted_gold = current_gold_balance - item_meta['cost']
                     char_stats['gold'] = new_deducted_gold
@@ -357,6 +369,8 @@ with tab_vault:
                         st.rerun()
                     except Exception:
                         st.error("⚠️ Transaction pipeline write failure.")
+            
+            # CONDITION 3: Insufficient gold fallback lockout state
             else:
                 st.button("🔒 Locked (Insufficient Gold)", disabled=True, key=f"lock_{item_id}")
 
@@ -365,7 +379,7 @@ with tab_vault:
         st.subheader("📜 Character Purchase History Logs")
         for claim in reversed(db_claims):
             status_symbol = "⏳" if claim.get("status", "Pending") == "Pending" else "✅"
-            status_text = "Pending Fulfillment" if claim.get("status", "Pending") == "Pending" else "Fulfilling Completed"
+            status_text = "Pending Fulfillment" if claim.get("status", "Pending") == "Pending" else "Fulfillment Completed"
             
             if claim.get("status", "Pending") == "Pending":
                 st.info(f"{status_symbol} **{claim['item_name']}** — Purchased on `{claim['claimed_at']}` | Status: *{status_text}*")

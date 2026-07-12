@@ -1,3 +1,5 @@
 streamlit
-supabase==2.4.0
+supabase==2.6.0
+postgrest==0.16.5
+gotrue==2.5.2
 pytz

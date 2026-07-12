@@ -307,6 +307,89 @@ with tab_board:
                         with st.expander(f"❌ Question {item['num']}: {item['q']}"):
                             st.write(f"**Your Choice:** `{item['mine']}`")
                             st.write(f"**Correct Target:** `{item['right']}`")
+        # ==========================================
+        # 📜 ADVENTURER'S GUILD JOURNAL LOG
+        # ==========================================
+        st.markdown("---")
+        st.subheader("📜 The Adventurer's Guild Journal")
+        st.markdown("Take a moment to record your journeys, victories, and future strategies in your personal log.")
+        
+        # Pull or initialize journal structure from database row safely
+        db_journal = row_data.get('journal_logs', {})
+        if not isinstance(db_journal, dict): db_journal = {}
+        
+        # Use today's calendar date string as the absolute unique key mapping
+        journal_date_str = str(datetime.date.today())
+        todays_log = db_journal.get(journal_date_str, {})
+        
+        # Render the input fields inside a specialized container card
+        with st.container():
+            st.markdown(f"✍️ **Journal Entry for Today: `{datetime.date.today().strftime('%A, %B %d, %Y')}`**")
+            
+            j_done = st.text_area(
+                "⚔️ What did I accomplish or do today?", 
+                value=todays_log.get("done_today", ""),
+                placeholder="Write down what lessons you finished or activities you enjoyed...",
+                key="journal_done_today_input"
+            )
+            
+            j_tomorrow = st.text_area(
+                "🗺️ What is my plan or next quest for tomorrow?", 
+                value=todays_log.get("tomorrow_plan", ""),
+                placeholder="What objectives or goals are you going to tackle next morning?",
+                key="journal_tomorrow_plan_input"
+            )
+            
+            j_challenge = st.text_area(
+                "🐉 What was the hardest challenge I faced today, and how did I handle it?", 
+                value=todays_log.get("hardest_challenge", ""),
+                placeholder="A tough problem? A tricky question? How did you overcome it?",
+                key="journal_challenge_input"
+            )
+            
+            j_gratitude = st.text_input(
+                "💎 Name 1 thing I am grateful for or happy about today:", 
+                value=todays_log.get("gratitude", ""),
+                placeholder="Something fun that happened, or something kind Tatay or Mom did...",
+                key="journal_gratitude_input"
+            )
+            
+            col_save_j, _ = st.columns([1, 3])
+            with col_save_j:
+                if st.button("💾 Seal Journal Entry", key="btn_save_daily_journal_log"):
+                    # Build payload schema dictionary
+                    db_journal[journal_date_str] = {
+                        "done_today": j_done.strip(),
+                        "tomorrow_plan": j_tomorrow.strip(),
+                        "hardest_challenge": j_challenge.strip(),
+                        "gratitude": j_gratitude.strip()
+                    }
+                    
+                    try:
+                        # Commit update payload row array changes directly back to Supabase
+                        supabase.table("weekly_packages").update({
+                            "journal_logs": db_journal
+                        }).eq("week_starting_date", str(current_sunday)).execute()
+                        
+                        st.success("✨ Your journal entry has been sealed in the archive stone!")
+                        st.balloons()
+                        st.rerun()
+                    except Exception as je:
+                        st.error(f"Failed to save journal logs: {str(je)}")
+
+        # Print past historical entries for this week as an inspiring ledger checklist
+        past_dates = sorted([d for d in db_journal.keys() if d != journal_date_str], reverse=True)
+        if past_dates:
+            with st.expander("📖 View Past Journal Entries This Week", expanded=False):
+                for past_date in past_dates:
+                    p_log = db_journal[past_date]
+                    p_date_obj = datetime.datetime.strptime(past_date, "%Y-%m-%d")
+                    st.markdown(f"#### 📅 {p_date_obj.strftime('%A, %B %d')} Ledger")
+                    st.markdown(f"**Done:** {p_log.get('done_today')}")
+                    st.markdown(f"**Plan:** {p_log.get('tomorrow_plan')}")
+                    st.markdown(f"**Challenge Overcome:** {p_log.get('hardest_challenge')}")
+                    st.markdown(f"**Gratitude Core:** ✨ {p_log.get('gratitude')}")
+                    st.markdown("---")
 
 # ----------------------------------------------------
 # TAB B: THE REWARDS VAULT SHOP

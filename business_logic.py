@@ -129,45 +129,43 @@ def handle_journal_save(
     db_journal: Dict,
     char_stats: Dict,
 ) -> bool:
-    """
-    Handle journal entry save and reward allocation.
+    """Handle journal entry save, apply rewards, and lock down."""
+    import utils
+    from config import REWARD_SETTINGS
     
-    Args:
-        supabase: Supabase client
-        current_sunday: The Sunday date of the week
-        journal_entry: The journal entry to save
-        db_journal: Current journal data
-        char_stats: Character stats to update
-        
-    Returns:
-        True if successful, False otherwise
-    """
     journal_date_str = utils.get_journal_date_key()
-    is_first_entry_today = utils.is_first_journal_entry_today(db_journal)
     
-    # Save entry
+    if not utils.is_first_journal_entry_today(db_journal):
+        st.toast("⚠️ Journal scroll has already been sealed for today!")
+        return False
+        
+    # Append the entry
     db_journal[journal_date_str] = journal_entry
     
-    # Apply rewards only on first entry
-    if is_first_entry_today:
-        xp_reward = REWARD_SETTINGS["journal_entry"]["xp"]
-        gold_reward = REWARD_SETTINGS["journal_entry"]["gold"]
-        
-        char_stats, level_ups = utils.apply_reward(char_stats, xp_reward, gold_reward)
-        
-        if level_ups > 0:
-            st.toast(f"👑 LEVEL UP! You have ascended to Level {char_stats['level']}!")
+    # Apply rewards (50 XP, 50 Gold)
+    xp_reward = REWARD_SETTINGS["journal_entry"]["xp"]
+    gold_reward = REWARD_SETTINGS["journal_entry"]["gold"]
+    char_stats, level_ups = utils.apply_reward(char_stats, xp_reward, gold_reward)
     
-    # Sync to database
-    return utils.update_weekly_package(
+    if level_ups > 0:
+        st.toast(f"👑 LEVEL UP! You have ascended to Level {char_stats['level']}!")
+    
+    # Push to Supabase (Ensure the column name matches your DB, usually 'journal' or 'db_journal')
+    success = utils.update_weekly_package(
         supabase,
         current_sunday,
         {
-            "journal_logs": db_journal,
+            "db_journal": db_journal, # Double check your actual column name here!
             "character_stats": char_stats,
         }
     )
-
+    
+    # VERY IMPORTANT: Update Streamlit session state so the UI locks out immediately
+    if success:
+        st.session_state["db_journal"] = db_journal
+        st.session_state["char_stats"] = char_stats
+        
+    return success
 
 # ==========================================
 # Quiz Submission Operations

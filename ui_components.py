@@ -58,18 +58,26 @@ def render_hero_profile(char_stats: Dict[str, int], current_weekday_name: str):
         char_stats: Character statistics dictionary
         current_weekday_name: Name of current day or "General Review Mode"
     """
+    from utils import calculate_xp_threshold
+    
     st.sidebar.title("🛡️ Hero Profile")
     st.sidebar.markdown(f"**Current Day Mode:** `{current_weekday_name}`")
     st.sidebar.markdown("---")
     
+    current_level = char_stats.get('level', 1)
+    current_xp = char_stats.get('xp', 0)
+    xp_needed = calculate_xp_threshold(current_level)
+    
     # Metrics Display Panel
     col_lvl, col_xp, col_gld = st.sidebar.columns(3)
-    col_lvl.metric("Level", f"Lvl {char_stats.get('level', 1)}")
-    col_xp.metric("XP", f"{char_stats.get('xp', 0)}/1000")
+    col_lvl.metric("Level", f"Lvl {current_level}")
+    col_xp.metric("XP", f"{current_xp}/{xp_needed}")
     col_gld.metric("Gold Wallet", f"🪙 {char_stats.get('gold', 0)}")
     
-    # XP Progress Bar
-    st.sidebar.progress(min(char_stats.get('xp', 0) / 1000, 1.0))
+    # XP Progress Bar (uses the SAME per-level threshold as the real
+    # level-up mechanism in utils.process_level_up, so the bar always
+    # accurately reflects how close the student is to leveling up)
+    st.sidebar.progress(min(current_xp / xp_needed, 1.0) if xp_needed > 0 else 0.0)
     st.sidebar.markdown("---")
 
 
@@ -675,3 +683,31 @@ def render_stats_modifier_form(char_stats: Dict[str, int], on_update: Callable[[
                 "xp": new_xp,
                 "gold": new_gold
             })
+
+
+def render_journal_archive(db_journal: Dict[str, Any]):
+    """
+    Render the full list of submitted journal entries for admin (Tatay) review.
+    
+    Args:
+        db_journal: Journal data dictionary, keyed by date string ('YYYY-MM-DD')
+    """
+    st.markdown("---")
+    st.subheader("📖 Adventurer's Daily Journal Log Archives")
+    
+    if not db_journal:
+        st.info("📭 The character has not committed any daily reflection scrolls for this week.")
+        return
+    
+    st.caption(f"Review daily progress submissions chronologically — {len(db_journal)} entr{'y' if len(db_journal) == 1 else 'ies'} logged this week:")
+    
+    # Most recent entries first
+    for date_key in sorted(db_journal.keys(), reverse=True):
+        log = db_journal.get(date_key, {})
+        with st.expander(f"📜 Entry Scroll: {date_key}", expanded=False):
+            st.markdown(f"**⚔️ Completed Tasks:** {log.get('done_today', 'Not logged')}")
+            st.markdown(f"**🗺️ Upcoming Plans:** {log.get('tomorrow_plan', 'Not logged')}")
+            st.markdown(f"**🐉 Tough Encounters:** {log.get('hardest_challenge', 'Not logged')}")
+            st.markdown(f"**💎 Expressed Gratitude:** *\"{log.get('gratitude', 'Not logged')}\"*")
+            if log.get("timestamp"):
+                st.caption(f"🕒 Submitted: {log['timestamp']}")

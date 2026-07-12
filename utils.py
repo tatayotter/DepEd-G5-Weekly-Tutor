@@ -77,13 +77,25 @@ def get_current_sunday() -> datetime.date:
 
 
 def get_journal_date_key() -> str:
+    """Returns a standardized string key for today's entry (e.g., '2026-07-12')."""
+    return datetime.date.today().isoformat()
+
+def is_first_journal_entry_today(db_journal: dict) -> bool:
     """
-    Get today's date as a string key for journal entries.
-    
-    Returns:
-        Today's date in YYYY-MM-DD format
+    Checks if the student has NOT filled out a journal entry yet today.
+    Returns True if the slot is empty (can write), False if already saved (locked).
     """
-    return str(datetime.date.today())
+    if not db_journal:
+        return True
+    date_key = get_journal_date_key()
+    return date_key not in db_journal
+
+def get_today_journal_entry(db_journal: dict) -> dict:
+    """Retrieves today's journal entry data or an empty template dictionary."""
+    if not db_journal:
+        return {}
+    date_key = get_journal_date_key()
+    return db_journal.get(date_key, {})
 
 
 # ==========================================

@@ -307,7 +307,6 @@ with tab_board:
                         with st.expander(f"❌ Question {item['num']}: {item['q']}"):
                             st.write(f"**Your Choice:** `{item['mine']}`")
                             st.write(f"**Correct Target:** `{item['right']}`")
-
 # ==========================================
         # 📜 ADVENTURER'S GUILD JOURNAL LOG
         # ==========================================
@@ -427,7 +426,7 @@ with tab_board:
                     st.markdown(f"**Challenge Overcome:** {p_log.get('hardest_challenge')}")
                     st.markdown(f"**Gratitude Core:** ✨ {p_log.get('gratitude')}")
                     st.markdown("---")
-                    
+
 # ----------------------------------------------------
 # TAB B: THE REWARDS VAULT SHOP
 # ----------------------------------------------------

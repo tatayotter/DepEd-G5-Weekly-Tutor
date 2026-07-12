@@ -372,6 +372,11 @@ with tab_vault:
             else:
                 st.success(f"{status_symbol} **{claim['item_name']}** — Claimed on `{claim['claimed_at']}` | Status: *{status_text}*")
 
+Here is the complete, updated code block for **TAB C**. It includes the unique keys (`key="admin_edit_..."`), wraps the modifiers inside a secure `st.form` to prevent the memory crash loop, and keeps the secure PIN protection gate active.
+
+Replace everything from `# ----------------------------------------------------` under **TAB C** to the end of your file with this block:
+
+```python
 # ----------------------------------------------------
 # TAB C: THE TATAY ADMIN CONTROL PANEL (SECURE)
 # ----------------------------------------------------
@@ -379,7 +384,7 @@ with tab_admin:
     st.title("🔑 Tatay's Admin Control Panel")
     
     # Simple secure PIN entry field
-    admin_pin = st.text_input("Enter Admin Access Key:", type="password", placeholder="••••")
+    admin_pin = st.text_input("Enter Admin Access Key:", type="password", placeholder="••••", key="tatay_admin_master_pin_gate")
     
     # Set your custom secret passkey here (Change this to whatever master PIN you want)
     if admin_pin == "735819":
@@ -427,10 +432,14 @@ with tab_admin:
             
             # --- EMERGENCY QUEST MANIPULATION / RESETS ---
             st.markdown("#### 🔧 Quest Override Vault")
-            reset_target = st.selectbox("Select a Quest Module to Reset:", ["-- Choose Target --"] + [f"{m['Day']}_{m['Subject']}" for m in matrix_data])
+            reset_target = st.selectbox(
+                "Select a Quest Module to Reset:", 
+                options=["-- Choose Target --"] + [f"{m['Day']}_{m['Subject']}" for m in matrix_data],
+                key="admin_quest_reset_dropdown"
+            )
             
             if reset_target != "-- Choose Target --":
-                if st.button("♻️ Force Reset Quest (Allow Retake)"):
+                if st.button("♻️ Force Reset Quest (Allow Retake)", key="btn_force_reset_quest_execution"):
                     if reset_target in db_mastered:
                         db_mastered.remove(reset_target)
                     if reset_target in db_attempts:
@@ -461,7 +470,6 @@ with tab_admin:
                         st.caption(f"Purchased on: {claim['claimed_at']}")
                         
                         if st.button("✅ Mark as Fulfilled / Handed Over", key=f"ful_{claim['claim_id']}"):
-                            # Update status parameter inside the matching list row dictionary element
                             for c in db_claims:
                                 if c.get("claim_id") == claim['claim_id']:
                                     c["status"] = "Fulfilled"
@@ -476,26 +484,49 @@ with tab_admin:
                                 st.error("Failed to update status column.")
                     st.markdown("---")
                     
-            # --- GOD MODE: STATS MODIFIERS PANEL ---
+            # ==========================================
+            # 🧙‍♂️ SECURED GOD MODE STATS EDITOR FORM
+            # ==========================================
             st.subheader("🧙‍♂️ Character Stats Modifier (God Mode)")
             
-            new_level = st.number_input("Character Level:", min_value=1, value=int(char_stats.get('level', 1)))
-            new_xp = st.slider("Experience Points (XP):", min_value=0, max_value=999, value=int(char_stats.get('xp', 0)))
-            new_gold = st.number_input("Gold Tokens Balance:", min_value=0, value=int(char_stats.get('gold', 0)))
-            
-            if st.button("💾 Save Modified Profile Stats"):
-                char_stats['level'] = new_level
-                char_stats['xp'] = new_xp
-                char_stats['gold'] = new_gold
+            with st.form(key="tatay_godmode_stats_form"):
+                new_level = st.number_input(
+                    "Character Level:", 
+                    min_value=1, 
+                    value=int(char_stats.get('level', 1)),
+                    key="admin_edit_level_input"
+                )
                 
-                try:
-                    supabase.table("weekly_packages").update({
-                        "character_stats": char_stats
-                    }).eq("week_starting_date", str(current_sunday)).execute()
-                    st.success("Character attributes successfully modified!")
-                    st.rerun()
-                except Exception:
-                    st.error("Failed to sync structural profile overrides.")
+                new_xp = st.slider(
+                    "Experience Points (XP):", 
+                    min_value=0, 
+                    max_value=999, 
+                    value=int(char_stats.get('xp', 0)),
+                    key="admin_edit_xp_slider"
+                )
+                
+                new_gold = st.number_input(
+                    "Gold Tokens Balance:", 
+                    min_value=0, 
+                    value=int(char_stats.get('gold', 0)),
+                    key="admin_edit_gold_input"
+                )
+                
+                submit_stats_changes = st.form_submit_button(label="💾 Save Modified Profile Stats")
+                
+                if submit_stats_changes:
+                    char_stats['level'] = new_level
+                    char_stats['xp'] = new_xp
+                    char_stats['gold'] = new_gold
                     
+                    try:
+                        supabase.table("weekly_packages").update({
+                            "character_stats": char_stats
+                        }).eq("week_starting_date", str(current_sunday)).execute()
+                        st.success("Character attributes successfully modified!")
+                        st.rerun()
+                    except Exception:
+                        st.error("Failed to sync structural profile overrides.")
+                        
     elif admin_pin != "":
         st.error("🔒 Incorrect Admin Key. Access Denied.")

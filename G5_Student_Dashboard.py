@@ -586,6 +586,57 @@ with tab_admin:
                             except Exception:
                                 st.error("Failed to update status column.")
                     st.markdown("---")
+
+            # ==========================================
+            # 🏆 TATAY'S REAL-WORLD ACHIEVEMENT BOUNTY OFFICE
+            # ==========================================
+            st.markdown("---")
+            st.subheader("🏆 Award Real-World Achievement Bounty")
+            st.caption("Reward good behavior, household deeds, or real-world achievements with custom gold!")
+            
+            with st.form(key="tatay_real_world_bounty_form"):
+                bounty_name = st.text_input(
+                    "📜 Activity Name / Achievement Title:", 
+                    placeholder="e.g., Helping clean up the kitchen table, Good behavior today",
+                    key="admin_bounty_title_input"
+                )
+                
+                bounty_gold = st.number_input(
+                    "🪙 Gold Coins to Award:", 
+                    min_value=1, 
+                    value=50, 
+                    step=5,
+                    key="admin_bounty_gold_input"
+                )
+                
+                submit_bounty = st.form_submit_button(label="🎁 Grant Gold Bounty to Character")
+                
+                if submit_bounty and bounty_name.strip() != "":
+                    # 1. Update his live character gold balance
+                    char_stats['gold'] = char_stats.get('gold', 0) + bounty_gold
+                    
+                    # 2. Append a unique event record directly into his history ledger tracking array
+                    bounty_entry = {
+                        "claim_id": f"bounty_{int(datetime.datetime.now().timestamp())}",
+                        "item_id": "real_world_achievement_grant",
+                        "item_name": f"✨ Tatay Bounty: {bounty_name.strip()} (+🪙 {bounty_gold} Gold)",
+                        "claimed_at": datetime.datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
+                        "status": "Fulfilled" # Marked as fulfilled automatically since it's an award
+                    }
+                    db_claims.append(bounty_entry)
+                    
+                    try:
+                        # 3. Synchronize data row parameters seamlessly to Supabase
+                        supabase.table("weekly_packages").update({
+                            "character_stats": char_stats,
+                            "claimed_rewards": db_claims
+                        }).eq("week_starting_date", str(current_sunday)).execute()
+                        
+                        st.success(f"🎉 Successfully awarded 🪙 {bounty_gold} Gold for: '{bounty_name}'!")
+                        st.balloons()
+                        st.rerun()
+                    except Exception as be:
+                        st.error(f"Failed to deposit transaction bounty parameters: {str(be)}")
                     
             # ==========================================
             # 🧙‍♂️ SECURED GOD MODE STATS EDITOR FORM

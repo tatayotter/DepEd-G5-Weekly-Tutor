@@ -673,12 +673,13 @@ with tab_admin:
                     key="admin_edit_level_input"
                 )
                 
-                new_xp = st.slider(
+                # 🛡️ Switched from st.slider to st.number_input to make 0 and large values bulletproof
+                new_xp = st.number_input(
                     "Experience Points (XP):", 
-                    min_value=0, 
-                    max_value=999, 
+                    min_value=0,
                     value=int(char_stats.get('xp', 0)),
-                    key="admin_edit_xp_slider"
+                    step=10,
+                    key="admin_edit_xp_numerical_input"
                 )
                 
                 new_gold = st.number_input(
@@ -691,24 +692,31 @@ with tab_admin:
                 submit_stats_changes = st.form_submit_button(label="💾 Save Modified Profile Stats")
                 
                 if submit_stats_changes:
-                    char_stats['level'] = new_level
-                    char_stats['xp'] = new_xp
+                    # 🚀 Safe Level Auto-Calculations:
+                    # If you enter an XP value of 1000+, it processes the level up rolls automatically
+                    final_xp = new_xp
+                    final_lvl = new_level
+                    
+                    while final_xp >= 1000:
+                        final_lvl += 1
+                        final_xp -= 1000
+                        
+                    char_stats['level'] = final_lvl
+                    char_stats['xp'] = final_xp
                     char_stats['gold'] = new_gold
                     
                     try:
-                        # 1. Commit the zeroed values safely to Supabase
+                        # Commit the sanitized profile attributes securely to Supabase
                         supabase.table("weekly_packages").update({
                             "character_stats": char_stats
                         }).eq("week_starting_date", str(current_sunday)).execute()
                         
-                        # 2. Clear out local active navigation states to prevent state mismatches
+                        # Clear active navigation states to ensure layout drawing syncs up perfectly
                         st.session_state["active_quest_uid"] = None
-                        
-                        # 3. Clean up matching active quiz session keys to match the new zero baseline
                         for key in list(st.session_state.keys()):
                             if "run_" in key or "active_" in key:
                                 del st.session_state[key]
-                        
+                                
                         st.success("Character attributes successfully modified!")
                         st.rerun()
                     except Exception as e:

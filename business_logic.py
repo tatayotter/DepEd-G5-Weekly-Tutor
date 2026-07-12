@@ -133,26 +133,16 @@ def handle_journal_save(
     Handle journal entry save, apply rewards, and lock down.
     """
     journal_date_str = utils.get_journal_date_key()
-    is_first_entry_today = utils.is_first_journal_entry_today(db_journal)
-
-    # Sync to database using the correct column name 'journal'
-    return utils.update_weekly_package(
-        supabase,
-        current_sunday,
-        {
-            "journal": db_journal, # Match the database column name 'journal'
-            "character_stats": char_stats,
-        }
-    )
     
-    # Block redundant saves if already sealed
-    if not is_first_entry_today:
+    # 1. Block redundant saves immediately if already sealed
+    if not utils.is_first_journal_entry_today(db_journal):
+        st.toast("⚠️ Journal scroll has already been sealed for today!")
         return False
         
-    # Save the text entry to the dictionary
+    # 2. Update the local dictionary with the NEW entry
     db_journal[journal_date_str] = journal_entry
     
-    # Apply rewards
+    # 3. Apply rewards only if it's the first entry
     xp_reward = REWARD_SETTINGS["journal_entry"]["xp"]
     gold_reward = REWARD_SETTINGS["journal_entry"]["gold"]
     char_stats, level_ups = utils.apply_reward(char_stats, xp_reward, gold_reward)
@@ -160,16 +150,21 @@ def handle_journal_save(
     if level_ups > 0:
         st.toast(f"👑 LEVEL UP! You have ascended to Level {char_stats['level']}!")
     
-    # --- CRITICAL FIX: Sync to Supabase using 'journal' (your actual column name) ---
+    # 4. Sync to Supabase ONCE with the updated data
     success = utils.update_weekly_package(
         supabase,
         current_sunday,
         {
-            "journal": db_journal,           
+            "journal": db_journal,
             "character_stats": char_stats,
         }
     )
     
+    # 5. Update session state so the UI immediately detects the change
+    if success:
+        st.session_state["db_journal"] = db_journal
+        st.session_state["char_stats"] = char_stats
+        
     return success
 
 # ==========================================

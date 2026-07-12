@@ -42,13 +42,26 @@ except Exception as db_error:
     st.code(str(db_error))
     st.stop()
 
-# 4. Handle Empty Package States Safely (UPDATED FOR DEBUGGING)
+# 4. Handle Empty Package States Safely
+weekly_data = {}  # Safe default initialization to prevent NameErrors
+
 if not package_data_list:
     st.info(f"✨ Great job checking in! Your study package for the week of **{current_sunday.strftime('%B %d, %Y')}** is currently being prepared. Enjoy your break time!")
-    
-    # ADD THESE TWO LINES TO DEBUG:
     st.warning(f"🔧 Technical Debug: The app is looking for a row in Supabase where week_starting_date = '{str(current_sunday)}'")
     st.stop()
+else:
+    # Ensure package_data is read safely
+    raw_data = package_data_list[0].get('package_data', {})
+    
+    # If Supabase stores it as a raw string text, parse it; otherwise use it directly
+    if isinstance(raw_data, str):
+        import json
+        try:
+            weekly_data = json.loads(raw_data)
+        except Exception:
+            weekly_data = {}
+    else:
+        weekly_data = raw_data
 
 # 5. Map Weekdays to Block Schedule Categories
 weekday_map = {0: "Monday", 1: "Tuesday", 2: "Wednesday", 3: "Thursday"}

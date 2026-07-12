@@ -372,11 +372,6 @@ with tab_vault:
             else:
                 st.success(f"{status_symbol} **{claim['item_name']}** — Claimed on `{claim['claimed_at']}` | Status: *{status_text}*")
 
-Here is the complete, updated code block for **TAB C**. It includes the unique keys (`key="admin_edit_..."`), wraps the modifiers inside a secure `st.form` to prevent the memory crash loop, and keeps the secure PIN protection gate active.
-
-Replace everything from `# ----------------------------------------------------` under **TAB C** to the end of your file with this block:
-
-```python
 # ----------------------------------------------------
 # TAB C: THE TATAY ADMIN CONTROL PANEL (SECURE)
 # ----------------------------------------------------

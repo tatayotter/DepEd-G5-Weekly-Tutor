@@ -72,14 +72,35 @@ else:
     st.sidebar.info("🏡 Weekend / General Review Mode")
     target_day = st.sidebar.selectbox("Choose Day to Review", list(weekday_map.values()))
 
-# 6. Isolate the Active Day's Target Subjects
-day_data = weekly_data.get(target_day, {})
+# 6. Dynamic Subject Selection with "✅ DONE" Labels
+selected_subject = None
+if selected_day and day_data:
+    # Pull current mastered list from database payload
+    row_data = package_data_list[0] if package_data_list else {}
+    db_mastered = row_data.get('mastered_quizzes', [])
+    if not isinstance(db_mastered, list):
+        db_mastered = []
 
-if not day_data:
-    st.warning(f"No subject data scheduled for {target_day} in this week's payload.")
-    st.stop()
+    # Build a clean mapping list of display labels
+    subject_options = []
+    subject_mapping = {} # Maps display text back to the clean subject name
 
-selected_subject = st.sidebar.selectbox("Choose a Subject", list(day_data.keys()))
+    for sub in day_data.keys():
+        subject_uid = f"{selected_day}_{sub}"
+        if subject_uid in db_mastered:
+            display_label = f"{sub} ✅ DONE"
+        else:
+            display_label = sub
+        
+        subject_options.append(display_label)
+        subject_mapping[display_label] = sub
+
+    # Render the selector dropdown
+    selected_display = st.sidebar.selectbox("📚 Choose Subject", options=subject_options)
+    
+    # Resolve clean subject string key for data lookups
+    if selected_display:
+        selected_subject = subject_mapping[selected_display]
 
 # ==========================================
 # 7. Render Lesson Summary & Gamified Dynamic Quiz Form (FULL ARCHITECTURE)

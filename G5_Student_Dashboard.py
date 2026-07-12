@@ -123,6 +123,100 @@ col_gld.metric("Gold Wallet", f"🪙 {char_stats.get('gold', 0)}")
 st.sidebar.progress(min(char_stats.get('xp', 0) / 1000, 1.0))
 st.sidebar.markdown("---")
 
+# ==========================================
+# 📜 SIDEBAR ADVENTURER'S GUILD JOURNAL LOG
+# ==========================================
+st.sidebar.markdown("### 📜 Guild Journal Ledger")
+
+# Pull or initialize journal structure from database row safely
+db_journal = row_data.get('journal_logs', {})
+if not isinstance(db_journal, dict): db_journal = {}
+
+# Use today's calendar date string as the absolute unique key mapping
+journal_date_str = str(datetime.date.today())
+todays_log = db_journal.get(journal_date_str, {})
+
+# 🔍 CHECK DAILY COMPLETION STATUS & RENDER METADATA BADGES
+if journal_date_str in db_journal:
+    st.sidebar.success("✅ Journal Sealed for Today!")
+    st.sidebar.caption("✨ *Your daily reflection bounty (+🪙 50 Gold) has been securely minted to your wallet.*")
+else:
+    st.sidebar.info("📝 Journal Status: Pending Today")
+    st.sidebar.caption("🎁 *First entry today rewards: +🪙 50 Gold | +✨ 50 XP (Available 7 days a week)*")
+
+# Use a clean sidebar expander window to keep input forms organized
+with st.sidebar.expander("✍️ Open Daily Journal Scroll", expanded=journal_date_str not in db_journal):
+    st.caption(f"Date: {datetime.date.today().strftime('%A, %b %d')}")
+    
+    j_done = st.text_area(
+        "⚔️ What I did today:", 
+        value=todays_log.get("done_today", ""),
+        placeholder="What lessons or activities did you do?",
+        key="sb_journal_done_input"
+    )
+    
+    j_tomorrow = st.text_area(
+        "🗺️ What I will do tomorrow:", 
+        value=todays_log.get("tomorrow_plan", ""),
+        placeholder="What targets are you tackling next?",
+        key="sb_journal_tomorrow_input"
+    )
+    
+    j_challenge = st.text_area(
+        "🐉 Hardest challenge today:", 
+        value=todays_log.get("hardest_challenge", ""),
+        placeholder="How did you handle the tough spots?",
+        key="sb_journal_challenge_input"
+    )
+    
+    j_gratitude = st.text_input(
+        "💎 One thing I'm grateful for:", 
+        value=todays_log.get("gratitude", ""),
+        placeholder="Something fun or kind that happened...",
+        key="sb_journal_gratitude_input"
+    )
+    
+    if st.button("💾 Seal Journal Entry", key="btn_sb_save_daily_journal"):
+        is_first_entry_today = journal_date_str not in db_journal
+        
+        # Build payload schema dictionary
+        db_journal[journal_date_str] = {
+            "done_today": j_done.strip(),
+            "tomorrow_plan": j_tomorrow.strip(),
+            "hardest_challenge": j_challenge.strip(),
+            "gratitude": j_gratitude.strip()
+        }
+        
+        # Process rewards only on the initial daily creation loop
+        if is_first_entry_today:
+            char_stats['gold'] = char_stats.get('gold', 0) + 50
+            new_xp = char_stats.get('xp', 0) + 50
+            lvl = char_stats.get('level', 1)
+            
+            # Handle Level Up threshold rules (Every 1000 XP)
+            if new_xp >= 1000:
+                lvl += 1
+                new_xp -= 1000
+                st.toast("👑 LEVEL UP! Your character grew stronger!")
+                
+            char_stats['xp'] = new_xp
+            char_stats['level'] = lvl
+        
+        try:
+            # Commit both the text logs AND his gold coins back to Supabase
+            supabase.table("weekly_packages").update({
+                "journal_logs": db_journal,
+                "character_stats": char_stats
+            }).eq("week_starting_date", str(current_sunday)).execute()
+            
+            st.sidebar.success("Journal saved!")
+            st.balloons()
+            st.rerun()
+        except Exception as je:
+            st.sidebar.error(f"Failed to sync logs: {str(je)}")
+
+st.sidebar.markdown("---")
+
 # Track ongoing active view session states
 if "active_quest_uid" not in st.session_state:
     st.session_state["active_quest_uid"] = None
@@ -307,32 +401,6 @@ with tab_board:
                         with st.expander(f"❌ Question {item['num']}: {item['q']}"):
                             st.write(f"**Your Choice:** `{item['mine']}`")
                             st.write(f"**Correct Target:** `{item['right']}`")
-        # ==========================================
-        # 📜 ADVENTURER'S GUILD JOURNAL LOG
-        # ==========================================
-        # Notice this aligns perfectly at 8 spaces! It sits outside the active quiz viewport,
-        # ensuring it always displays at the bottom of the main Quest Board Hub tab.
-        st.markdown("---")
-        st.subheader("📜 The Adventurer's Guild Journal")
-        st.markdown("Record your daily travels, battle milestones, and future campaigns to earn your daily bounty.")
-        
-        # Pull or initialize journal structure from database row safely
-        db_journal = row_data.get('journal_logs', {})
-        if not isinstance(db_journal, dict): db_journal = {}
-        
-        # Use today's calendar date string as the absolute unique key mapping
-        journal_date_str = str(datetime.date.today())
-        todays_log = db_journal.get(journal_date_str, {})
-        
-        # Render the input fields inside a specialized container card
-        with st.container():
-            st.markdown(f"✍️ **Journal Entry for Today: `{datetime.date.today().strftime('%A, %B %d, %Y')}`**")
-            
-            # Highlight reward availability status
-            if journal_date_str in db_journal:
-                st.caption("✅ *Daily reflection logged! Updates are allowed, but bonus gold has already been claimed for today.*")
-            else:
-                st.info("🎁 *First entry today rewards: +🪙 50 Gold | +✨ 50 XP (Available 7 days a week)*")
 
 # ----------------------------------------------------
 # TAB B: THE REWARDS VAULT SHOP

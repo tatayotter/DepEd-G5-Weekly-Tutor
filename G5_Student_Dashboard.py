@@ -10,44 +10,60 @@ st.set_page_config(
 )
 
 # ==========================================
-# 1. Initialize Direct Supabase Connection (BULLETPROOF MULTI-PATH ENGINE)
+# 1. Initialize Direct Supabase Connection (WITH DIAGNOSTICS)
 # ==========================================
 url = None
 key = None
 
-# Attempt A: Check nested [connections][supabase] dictionary table structure first
+# 1. Try reading from [connections][supabase]
 try:
     url = st.secrets["connections"]["supabase"]["supabase_url"]
     key = st.secrets["connections"]["supabase"]["supabase_key"]
 except Exception:
     pass
 
-# Attempt B: Check flat text string root configurations secondary lookup matrix
+# 2. Try reading from flat root keys
 if not url or not key:
     try:
-        url = st.secrets.get("SUPABASE_URL") or st.secrets.get("supabase_url")
-        key = st.secrets.get("SUPABASE_KEY") or st.secrets.get("supabase_key")
+        url = st.secrets.get("supabase_url") or st.secrets.get("SUPABASE_URL")
+        key = st.secrets.get("supabase_key") or st.secrets.get("SUPABASE_KEY")
     except Exception:
         pass
 
-# Final Client Verification & Generation Frame
+# 📊 LIVE DIAGNOSTICS PANEL (Prints safely on screen to find the culprit)
+st.sidebar.subheader("🔍 Database Connection Debug")
+if not url:
+    st.sidebar.error("❌ URL Status: Missing/Not Found in Secrets")
+else:
+    # Safe sanitization to show format without leaking the actual key
+    clean_url = str(url).strip()
+    st.sidebar.success(f"🔗 URL Found (Length: {len(clean_url)})")
+    if not clean_url.startswith("https://"):
+        st.sidebar.warning("⚠️ URL Warning: Does not start with 'https://'")
+    if clean_url.endswith("/"):
+        st.sidebar.warning("⚠️ URL Warning: Has a trailing slash '/' at the end")
+
+if not key:
+    st.sidebar.error("❌ Key Status: Missing/Not Found in Secrets")
+else:
+    clean_key = str(key).strip()
+    st.sidebar.success(f"🔑 Key Found (Length: {len(clean_key)})")
+    if len(clean_key) < 50:
+        st.sidebar.warning("⚠️ Key Warning: Length seems too short for a Supabase anon key.")
+
+# Final Handshake Execution
 if url and key:
     try:
-        # Clear out any potential trailing slashes that cause deep library PostgREST crashes
-        url = url.strip().rstrip("/")
-        key = key.strip()
+        # Strictly clean up the strings before passing to client initializer
+        final_url = str(url).strip().rstrip("/")
+        final_key = str(key).strip()
         
-        supabase: Client = create_client(url, key)
+        supabase: Client = create_client(final_url, final_key)
     except Exception as initialization_err:
         st.error(f"🔒 Supabase Client Handshake Failed: {str(initialization_err)}")
         st.stop()
 else:
-    st.error("🔒 Secrets Configuration Error: Could not read credentials.")
-    st.info("💡 **Tatay's Admin Tip:** If the app hit this fallback wall, go to your Streamlit Cloud Secrets text box panel and append these direct root variables at the very top of the box to bypass dictionary parsing bugs:")
-    st.code("""
-supabase_url = "https://your-project-id.supabase.co"
-supabase_key = "your-long-anon-public-key-here"
-    """)
+    st.error("🔒 Secrets Configuration Error: Credentials could not be extracted.")
     st.stop()
 
 st.title("🎓 Grade 5 Daily Learning Dashboard")

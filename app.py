@@ -60,10 +60,20 @@ def main():
     ui_components.render_hero_profile(char_stats, current_weekday_name)
     
     # Journal save callback
-    def on_journal_save(journal_inputs: dict):
-    """Callback triggered when the student seals their daily journal."""
-    import utils
-    from config import REWARD_SETTINGS
+    def on_journal_submit(journal_inputs):
+    """Callback to handle saving and state refresh."""
+    # ... call business_logic.handle_journal_save ...
+    success = business_logic.handle_journal_save(...)
+    
+    if success:
+        # FORCE REFRESH: Re-load the data from Supabase immediately
+        # so the 'is_first_entry' check in utils.py returns False
+        st.session_state["db_journal"] = business_logic.load_weekly_data(supabase, current_sunday)[0][0].get('journal')
+        st.rerun() 
+    return success
+
+# Pass this function to the UI component
+ui_components.render_journal_section(..., on_save_callback=on_journal_submit)
     
     # 1. Generate today's date string identifier (e.g., "2026-07-12")
     date_key = utils.get_journal_date_key()

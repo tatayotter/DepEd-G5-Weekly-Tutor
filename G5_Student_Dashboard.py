@@ -536,10 +536,7 @@ with tab_admin:
             # --- EMERGENCY QUEST MANIPULATION / RESETS ---
             st.markdown("#### 🔧 Quest Override Vault")
             
-            # --- EMERGENCY QUEST MANIPULATION / RESETS ---
-            st.markdown("#### 🔧 Quest Override Vault")
-            
-            # Create a clean form block to isolate widget states during deletion
+            # Create a clean isolated form block to manage multi-reset widget updates safely
             with st.form(key="tatay_quest_override_reset_form"):
                 reset_options = ["-- Choose Target --"] + [f"{m['Day']}_{m['Subject']}" for m in matrix_data]
                 
@@ -556,7 +553,7 @@ with tab_admin:
                     if reset_target in db_mastered:
                         db_mastered.remove(reset_target)
                     
-                    # 2. Reset attempt counter safely from the tracking dictionary
+                    # 2. Reset attempt counter safely inside the dictionary tracking parameters
                     db_attempts[reset_target] = 0
                         
                     try:
@@ -566,12 +563,16 @@ with tab_admin:
                             "quiz_attempts": db_attempts
                         }).eq("week_starting_date", str(current_sunday)).execute()
                         
-                        # 4. Clear active session cache flags entirely to prevent state lockup
+                        # 4. Aggressive memory purge: Wipe out widget state buffers entirely
                         st.session_state["active_quest_uid"] = None
                         
-                        # Completely purge any remaining trace keys of this quest from memory
+                        # Kill the specific form cache key to allow successive back-to-back operations
+                        if "tatay_quest_override_reset_form" in st.session_state:
+                            del st.session_state["tatay_quest_override_reset_form"]
+                            
+                        # Clear specific quiz radio components and drop down memory logs
                         for cache_key in list(st.session_state.keys()):
-                            if "run_" in cache_key or "form_" in cache_key:
+                            if "run_" in cache_key or "form_" in cache_key or "admin_quest_reset" in cache_key:
                                 del st.session_state[cache_key]
                         
                         st.success(f"Successfully unlocked {reset_target}! Re-syncing dashboard layout...")

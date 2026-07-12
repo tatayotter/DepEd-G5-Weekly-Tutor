@@ -246,6 +246,10 @@ def render_admin_tab(
     if not ui_components.render_admin_authentication():
         return
     
+    # Read directly from session state or your data object
+    # If using row_data, ensure it points to 'journal'
+    current_journal_db = st.session_state.get("db_journal", {})
+    
     # Build quest matrix
     matrix_data = business_logic.build_quest_status_matrix(
         weekly_data, db_mastered, db_attempts

@@ -21,18 +21,20 @@ st.markdown("---")
 # ==========================================
 # 2. Establish Direct Supabase Database Connection
 # ==========================================
-@st.cache_resource
-def init_supabase() -> Client:
-    # Safely pulls credentials from Streamlit Cloud Secrets management panel
-    url = st.secrets["SUPABASE_URL"]
-    key = st.secrets["SUPABASE_KEY"]
-    return create_client(url, key)
-
+# This reads directly from your [connections.supabase] configuration block
 try:
-    supabase = init_supabase()
-except Exception as conn_err:
-    st.error("🔒 Critical Error: Connection to cloud database failed. Verify your Streamlit App Secrets configuration.")
-    st.stop()
+    # If using streamlit-supabase-connection package
+    from streamlit_supabase_connection import SupabaseConnection
+    supabase = st.connection("supabase", type=SupabaseConnection)
+except Exception:
+    # Fallback to standard client initialization using the connection secrets structure
+    try:
+        url = st.secrets["connections"]["supabase"]["url"]
+        key = st.secrets["connections"]["supabase"]["anon_key"] # or "key" depending on your exact label
+        supabase = create_client(url, key)
+    except Exception as conn_err:
+        st.error("🔒 Critical Error: Connection to cloud database failed. Verify your [connections.supabase] Secrets syntax.")
+        st.stop()
 
 # ==========================================
 # 3. Calculate Target Sunday Anchor Date (PH Timezone Aware)

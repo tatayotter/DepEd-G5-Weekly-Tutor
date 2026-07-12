@@ -515,7 +515,7 @@ def get_current_weekday_name() -> str:
     Returns:
         Weekday name or "General Review Mode"
     """
-    today = datetime.date.today()
+    today = utils.get_ph_today()
     return WEEKDAY_MAP.get(today.weekday(), "General Review Mode")
 
 

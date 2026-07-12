@@ -78,93 +78,61 @@ def render_journal_section(
     char_stats: Dict[str, int],
     current_sunday: datetime.date,
     on_save_callback: Callable[[Dict], bool]
-) -> bool:
-    """
-    Render the journal entry section in the sidebar with a true form lock.
-    """
+):
+    """Render the journal entry section in the sidebar using a strict form lock."""
     from utils import get_journal_date_key, get_today_journal_entry, is_first_journal_entry_today
     
     st.sidebar.markdown("### 📜 Guild Journal Ledger")
     
-    journal_date_str = get_journal_date_key()
     todays_log = get_today_journal_entry(db_journal)
     is_first_entry = is_first_journal_entry_today(db_journal)
     
-    # Display status and handle lockout
+    # BOUNDARY STATE: Locked for the day
     if not is_first_entry:
         st.sidebar.success("✅ Journal Sealed for Today!")
-        st.sidebar.caption("✨ *Your daily reflection bounty (+🪙 50 Gold) has been securely minted to your wallet.*")
+        st.sidebar.caption("✨ *Your daily reflection bounty has been securely minted to your wallet.*")
         
-        # Display the static sealed review so the student can still read what they wrote
-        with st.sidebar.expander("👀 View Today's Sealed Scroll", expanded=False):
-            st.markdown(f"**⚔️ Completed:**\n{todays_log.get('done_today', '')}")
-            st.markdown(f"**🗺️ Tomorrow's Target:**\n{todays_log.get('tomorrow_plan', '')}")
-            st.markdown(f"**🐉 Toughest Foe:**\n{todays_log.get('hardest_challenge', '')}")
-            st.markdown(f"**💎 Grateful For:**\n{todays_log.get('gratitude', '')}")
-        return True
+        with st.sidebar.expander("👀 View Sealed Scroll Reflections", expanded=False):
+            st.markdown(f"**⚔️ What I Did:**\n`{todays_log.get('done_today', '')}`")
+            st.markdown(f"**🗺️ Tomorrow's Target:**\n`{todays_log.get('tomorrow_plan', '')}`")
+            st.markdown(f"**🐉 Toughest Foe:**\n`{todays_log.get('hardest_challenge', '')}`")
+            st.markdown(f"**💎 Grateful For:**\n`{todays_log.get('gratitude', '')}`")
+        return
     
-    else:
-        st.sidebar.info("📝 Journal Status: Pending Today")
-        st.sidebar.caption("🎁 *First entry today rewards: +🪙 50 Gold | +✨ 50 XP*")
+    # OPEN STATE: Ready to Write
+    st.sidebar.info("📝 Journal Status: Pending Today")
+    st.sidebar.caption("🎁 *Rewards: +🪙 50 Gold | +✨ 50 XP*")
     
-    # Render interactive form ONLY if no entry exists yet today
     with st.sidebar.expander("✍️ Open Daily Journal Scroll", expanded=True):
         st.caption(f"Date: {datetime.date.today().strftime('%A, %b %d')}")
         
-        # Wrapping with a true Streamlit form keeps text inputs in state memory on submit
-        with st.form(key="daily_journal_guild_form"):
-            j_done = st.text_area(
-                "⚔️ What I did today:",
-                value=todays_log.get("done_today", ""),
-                placeholder="What lessons or activities did you do?",
-                key="sb_journal_done_input"
-            )
-            
-            j_tomorrow = st.text_area(
-                "🗺️ What I will do tomorrow:",
-                value=todays_log.get("tomorrow_plan", ""),
-                placeholder="What targets are you tackling next?",
-                key="sb_journal_tomorrow_input"
-            )
-            
-            j_challenge = st.text_area(
-                "🐉 Hardest challenge today:",
-                value=todays_log.get("hardest_challenge", ""),
-                placeholder="How did you handle the tough spots?",
-                key="sb_journal_challenge_input"
-            )
-            
-            j_gratitude = st.text_input(
-                "💎 One thing I'm grateful for:",
-                value=todays_log.get("gratitude", ""),
-                placeholder="Something fun or kind that happened...",
-                key="sb_journal_gratitude_input"
-            )
+        # Wrapped inside a form to guarantee string persistence before execution
+        with st.form(key="guild_journal_lock_form"):
+            j_done = st.text_area("⚔️ What I did today:", key="sb_journal_done_input")
+            j_tomorrow = st.text_area("🗺️ What I will do tomorrow:", key="sb_journal_tomorrow_input")
+            j_challenge = st.text_area("🐉 Hardest challenge today:", key="sb_journal_challenge_input")
+            j_gratitude = st.text_input("💎 One thing I'm grateful for:", key="sb_journal_gratitude_input")
             
             submit_journal = st.form_submit_button("💾 Seal Journal Entry")
             
             if submit_journal:
-                # Basic validation to prevent saving completely empty scroll logs
                 if not j_done.strip() or not j_tomorrow.strip():
-                    st.error("⚠️ The scroll cannot be empty! Record your progress before sealing.")
-                    return False
-                
+                    st.error("⚠️ Record your daily progress before sealing the scroll!")
+                    return
+                    
                 journal_entry = {
                     "done_today": j_done.strip(),
                     "tomorrow_plan": j_tomorrow.strip(),
                     "hardest_challenge": j_challenge.strip(),
-                    "gratitude": j_gratitude.strip()
+                    "gratitude": j_gratitude.strip(),
+                    "timestamp": datetime.datetime.now().isoformat()
                 }
                 
+                # Execute the save handler in app.py
                 if on_save_callback(journal_entry):
-                    st.success("Journal saved successfully!")
+                    st.success("Scroll sealed successfully!")
                     st.balloons()
                     st.rerun()
-                else:
-                    st.error("Failed to sync logs to Supabase.")
-                    return False
-    
-    return True
 
 
 def render_sidebar_navigation(session_state):

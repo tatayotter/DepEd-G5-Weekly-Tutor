@@ -484,19 +484,15 @@ def handle_stats_update(
     Returns:
         True if successful
     """
-    # Process level ups if XP is high
-    final_xp = new_stats.get("xp", 0)
-    final_lvl = new_stats.get("level", 1)
-    
-    while final_xp >= 1000:
-        final_lvl += 1
-        final_xp -= 1000
-    
+    # Process level ups using the SAME dynamic threshold formula used
+    # everywhere else in the app (utils.calculate_xp_threshold), so manually
+    # edited stats stay consistent with stats earned through normal play.
     updated_stats = {
-        "level": final_lvl,
-        "xp": final_xp,
-        "gold": new_stats.get("gold", 0),
+        "level": int(new_stats.get("level", 1)),
+        "xp": int(new_stats.get("xp", 0)),
+        "gold": int(new_stats.get("gold", 0)),
     }
+    utils.process_level_up(updated_stats)
     
     return utils.update_weekly_package(
         supabase,

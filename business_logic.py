@@ -93,12 +93,6 @@ def load_weekly_data(supabase: Client, current_sunday: datetime.date) -> Tuple[D
 def extract_row_data(package_data_list: List[Dict]) -> Dict[str, Any]:
     """
     Extract and validate all fields from package row data.
-    
-    Args:
-        package_data_list: List of package data from Supabase
-        
-    Returns:
-        Validated row data dictionary
     """
     row_data = package_data_list[0] if package_data_list else {}
     
@@ -106,8 +100,13 @@ def extract_row_data(package_data_list: List[Dict]) -> Dict[str, Any]:
     db_attempts = utils.validate_dict_field(row_data.get('quiz_attempts'))
     db_mastered = utils.validate_list_field(row_data.get('mastered_quizzes'))
     db_claims = utils.validate_list_field(row_data.get('claimed_rewards'))
-    db_journal = utils.validate_dict_field(row_data.get('journal_logs'))
     db_unlocked_achvs = utils.validate_list_field(row_data.get('unlocked_achievements'))
+    
+    # --- CRITICAL FIX: Look for both possible column names in your database ---
+    raw_journal = row_data.get('journal')
+    if raw_journal is None:
+        raw_journal = row_data.get('journal_logs')
+    db_journal = utils.validate_dict_field(raw_journal)
     
     return {
         "char_stats": char_stats,

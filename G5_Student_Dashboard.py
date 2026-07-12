@@ -85,61 +85,78 @@ if not day_data:
 
 selected_subject = st.sidebar.selectbox("Choose a Subject", list(day_data.keys()))
 
-# 7. Render Lesson Summary & Dynamic Quiz Form with Anti-Cheat & Instant Feedback
+# 7. Render Lesson Summary & Dynamic Quiz Form with Fixed Memory Logic
 if selected_subject:
     subject_data = day_data[selected_subject]
     quiz_data = subject_data.get('quiz', [])
     
-    # Initialize session state keys unique to this specific subject segment
+    # Define distinct, persistent state keys
+    quiz_active_key = f"active_{target_day}_{selected_subject}"
     submitted_key = f"submitted_{target_day}_{selected_subject}"
     score_key = f"score_{target_day}_{selected_subject}"
     feedback_key = f"feedback_{target_day}_{selected_subject}"
     saved_answers_key = f"saved_answers_{target_day}_{selected_subject}"
     
+    # Initialize keys if missing from session state
+    if quiz_active_key not in st.session_state:
+        st.session_state[quiz_active_key] = False
     if submitted_key not in st.session_state:
         st.session_state[submitted_key] = False
         st.session_state[score_key] = 0
         st.session_state[feedback_key] = []
         st.session_state[saved_answers_key] = {}
 
-    checkbox_key = f"toggle_{target_day}_{selected_subject}"
+    # Sidebar Controller Layout
+    st.sidebar.markdown("### 🕹️ Quiz Status")
     
-    # Anti-Peeking Enforcement: Lock the view if the quiz has started but isn't submitted yet
-    if checkbox_key in st.session_state and st.session_state[checkbox_key] and not st.session_state[submitted_key]:
-        start_quiz = st.sidebar.checkbox("📝 Ready? Hide Notes & Start Quiz", value=True, disabled=True, key=f"disabled_{checkbox_key}")
-        st.sidebar.caption("🔒 Notes are locked until you submit your answers.")
+    if st.session_state[submitted_key]:
+        st.sidebar.success("✅ Quiz Completed!")
+        if st.sidebar.button("🔓 Open Study Notes Again"):
+            st.session_state[quiz_active_key] = False
+            st.session_state[submitted_key] = False  # Reset for clean slate
+            st.rerun()
+    elif st.session_state[quiz_active_key]:
+        st.sidebar.warning("🔒 Quiz In Progress...")
+        st.sidebar.caption("Study notes are locked until submission.")
     else:
-        start_quiz = st.sidebar.checkbox("📝 Ready? Hide Notes & Start Quiz", key=checkbox_key)
-        st.sidebar.markdown("---")
+        if st.sidebar.button("📝 Hide Notes & Start Quiz"):
+            st.session_state[quiz_active_key] = True
+            st.rerun()
+            
+    st.sidebar.markdown("---")
+
+    # SCREEN ROUTING LOGIC (Using strict memory states instead of UI variables)
     
-    # Layout State A: Reading Mode (Quiz Hidden, Notes Visible)
-    if not start_quiz:
+    # LAYOUT A: Reading Mode
+    if not st.session_state[quiz_active_key] and not st.session_state[submitted_key]:
         st.subheader(f"📖 Reviewing: {selected_subject}")
-        st.info("💡 Read through these core concepts and concrete examples carefully. When you are ready, check the box in the left sidebar to hide the notes and unlock your quiz!")
+        st.info("💡 Read through these core concepts and concrete examples carefully. When you are ready, click the button in the left sidebar to hide the notes and unlock your quiz!")
         
         clean_markdown = subject_data['summary_markdown'].replace(r'\n', '\n')
         st.markdown(clean_markdown)
         
-    # Layout State B: Testing Mode (Notes Hidden, Quiz Visible)
+    # LAYOUT B: Testing & Feedback Mode
     else:
-        st.subheader(f"🧠 Quiz Time: {selected_subject}")
+        st.subheader(f"🧠 Quiz Performance: {selected_subject}")
         
         if not quiz_data:
             st.info("No quiz items found for this specific subject segment.")
         else:
-            with st.form(key=f"secure_quiz_form_{target_day}_{selected_subject}"):
+            # Main Interactive Evaluation Frame
+            with st.container():
                 user_answers = {}
                 
+                # Loop through all 5 items
                 for i, q in enumerate(quiz_data):
                     st.write(f"**Q{i+1}: {q['question']}**")
                     
-                    # If already submitted, read the saved selection out of memory; otherwise render fresh
+                    # Lock input index if submitted, otherwise leave blank
                     default_idx = None
                     if st.session_state[submitted_key]:
                         saved_val = st.session_state[saved_answers_key].get(i)
                         if saved_val in q['options']:
                             default_idx = q['options'].index(saved_val)
-                            
+                    
                     user_answers[i] = st.radio(
                         "Select the best option:", 
                         options=q['options'], 
@@ -148,59 +165,54 @@ if selected_subject:
                         disabled=st.session_state[submitted_key]
                     )
                     st.write("---")
-                    
-                if not st.session_state[submitted_key]:
-                    submit_button = st.form_submit_button(label="Submit Answers")
-                else:
-                    submit_button = False
-                    st.info("✅ You have completed this quiz. Uncheck the sidebar box if you want to review the study notes again.")
                 
-                # Grade the quiz immediately upon submission before state resets
-                if submit_button:
-                    unanswered = any(ans is None for ans in user_answers.values())
-                    
-                    if unanswered:
-                        st.warning("⚠️ Please answer all questions before clicking submit.")
-                    else:
-                        score = 0
-                        wrong_items = []
+                # Bottom Action Button Handling
+                if not st.session_state[submitted_key]:
+                    if st.button("🚀 Submit Final Answers"):
+                        unanswered = any(ans is None for ans in user_answers.values())
                         
-                        for i, q in enumerate(quiz_data):
-                            if user_answers[i] == q['correct_answer']:
-                                score += 1
-                            else:
-                                wrong_items.append({
-                                    "num": i + 1,
-                                    "question": q['question'],
-                                    "your_ans": user_answers[i],
-                                    "correct_ans": q['correct_answer']
-                                })
-                        
-                        # Save everything explicitly to session state
-                        st.session_state[score_key] = score
-                        st.session_state[feedback_key] = wrong_items
-                        st.session_state[saved_answers_key] = user_answers
-                        st.session_state[submitted_key] = True
-                        st.rerun()
+                        if unanswered:
+                            st.warning("⚠️ Please select an answer for all 5 questions before submitting.")
+                        else:
+                            score = 0
+                            wrong_items = []
+                            
+                            for i, q in enumerate(quiz_data):
+                                if user_answers[i] == q['correct_answer']:
+                                    score += 1
+                                else:
+                                    wrong_items.append({
+                                        "num": i + 1,
+                                        "question": q['question'],
+                                        "your_ans": user_answers[i],
+                                        "correct_ans": q['correct_answer']
+                                    })
+                            
+                            # Lock values directly into persistent memory matrices
+                            st.session_state[score_key] = score
+                            st.session_state[feedback_key] = wrong_items
+                            st.session_state[saved_answers_key] = user_answers
+                            st.session_state[submitted_key] = True
+                            st.rerun()
 
-            # Display Results Panel (Persists flawlessly because data resides in session_state)
+            # PERSISTENT SCORE & FEEDBACK VIEW PANEL
             if st.session_state[submitted_key]:
                 final_score = st.session_state[score_key]
                 total_q = len(quiz_data)
                 missed_list = st.session_state[feedback_key]
                 
-                st.markdown("### 📊 Quiz Results")
+                st.markdown("### 📊 Your Results Breakdown")
                 if final_score == total_q:
                     st.balloons()
                     st.success(f"🎉 Perfect Score! {final_score}/{total_q}. Outstanding retention!")
                 elif final_score >= 3:
-                    st.success(f"👍 Good effort! You scored {final_score}/{total_q}. Let's look closely at what to improve:")
+                    st.success(f"👍 Good effort! You scored {final_score}/{total_q}. Review the items missed below:")
                 else:
-                    st.warning(f"📚 You scored {final_score}/{total_q}. Let's treat this as a great practice run. Review the items below:")
+                    st.warning(f"📚 You scored {final_score}/{total_q}. Let's read back through the lesson points after checking your answers below.")
                 
-                # Detailed Correction Breakdown Layout
+                # Dynamic Expander List for Wrong Options
                 if missed_list:
-                    st.markdown("### 🔍 Reviewing Missed Questions")
+                    st.markdown("#### 🔍 Reviewing Missed Questions")
                     for item in missed_list:
                         with st.expander(f"❌ Question {item['num']}: {item['question']}"):
                             st.write(f"**Your Answer:** `{item['your_ans']}`")

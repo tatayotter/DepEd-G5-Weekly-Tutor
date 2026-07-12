@@ -30,17 +30,13 @@ today = datetime.date.today()
 sunday_offset = (today.weekday() + 1) % 7
 current_sunday = today - datetime.timedelta(days=sunday_offset)
 
-# 3. Fetch Data using Direct Client Syntax
-try:
-    response = supabase.table("weekly_packages")\
-        .select("package_data")\
-        .eq("week_starting_date", str(current_sunday))\
-        .execute()
-    package_data_list = response.data
-except Exception as db_error:
-    st.error("⚠️ Database Error: Failed to fetch study records from the cloud table.")
-    st.code(str(db_error))
-    st.stop()
+# 3. Fetch Weekly Package from Supabase (FIXED TO PULL ALL COLUMNS)
+response = supabase.table("weekly_packages") \
+    .select("*") \
+    .eq("week_starting_date", str(current_sunday)) \
+    .execute()
+
+package_data_list = response.data
 
 # 4. Handle Empty Package States Safely
 weekly_data = {}  # Safe default initialization to prevent NameErrors

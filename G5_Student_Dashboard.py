@@ -320,7 +320,7 @@ with tab_vault:
     vault_catalog = {
         "voucher_30m": {"name": "🎮 30-Min Gaming Voucher", "cost": 100, "desc": "Unlocks 30 minutes of console gaming or modding runtime privileges."},
         "jollibee_burger": {"name": "🍔 Jollibee Yumburger Reward", "cost": 250, "desc": "Claim a real-world Jollibee hamburger snack ordered by Tatay. (Limit: 1 per week)"},
-        "ai_lording": {"name": "🧙‍♂️ 30-Min AI Lording Sandbox", "cost": 150, "desc": "Unlocks 30 minutes of advanced AI prompt mastery using Google Gemini to construct custom worlds and stories."}
+        "ai_lording": {"name": "🧙‍♂️ 30-Min AI Lording Sandbox", "cost": 100, "desc": "Unlocks 30 minutes of advanced AI prompt mastery using Google Gemini to construct custom worlds and stories."}
     }
     
     current_gold_balance = char_stats.get('gold', 0)

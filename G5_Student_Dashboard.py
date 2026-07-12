@@ -1,17 +1,3 @@
-Your code is failing due to a couple of undefined variables (**NameErrors**) in **Section 6**. Specifically, the script references `selected_day` and `day_data` without initializing them first.
-
-Here is exactly what needs to be fixed to make it run:
-
-1. `selected_day` should be changed to `target_day` (which you successfully defined in Section 5).
-2. `day_data` needs to be extracted from `weekly_data` using the `target_day` key.
-
----
-
-### The Fixed Code
-
-Here is the complete, updated script with the missing variables correctly initialized:
-
-```python
 import streamlit as st
 from supabase import create_client, Client
 import datetime
@@ -87,13 +73,8 @@ else:
     target_day = st.sidebar.selectbox("Choose Day to Review", list(weekday_map.values()))
 
 # 6. Dynamic Subject Selection with "✅ DONE" Labels
-# --- FIX: Safely extract day_data from weekly_data ---
-day_data = weekly_data.get(target_day, {})
-
 selected_subject = None
-
-# --- FIX: Changed selected_day to target_day ---
-if target_day and day_data:
+if selected_day and day_data:
     # Pull current mastered list from database payload
     row_data = package_data_list[0] if package_data_list else {}
     db_mastered = row_data.get('mastered_quizzes', [])
@@ -105,8 +86,7 @@ if target_day and day_data:
     subject_mapping = {} # Maps display text back to the clean subject name
 
     for sub in day_data.keys():
-        # --- FIX: Changed selected_day to target_day ---
-        subject_uid = f"{target_day}_{sub}"
+        subject_uid = f"{selected_day}_{sub}"
         if subject_uid in db_mastered:
             display_label = f"{sub} ✅ DONE"
         else:

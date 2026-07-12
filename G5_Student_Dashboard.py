@@ -85,22 +85,27 @@ if not day_data:
 
 selected_subject = st.sidebar.selectbox("Choose a Subject", list(day_data.keys()))
 
-# 7. Render Lesson Summary & Dynamic Quiz Form with Anti-Cheat & Feedback
+# 7. Render Lesson Summary & Dynamic Quiz Form with Anti-Cheat & Instant Feedback
 if selected_subject:
     subject_data = day_data[selected_subject]
     quiz_data = subject_data.get('quiz', [])
     
-    # Initialize session state tracking unique to this specific subject segment
-    quiz_submitted_key = f"submitted_{target_day}_{selected_subject}"
-    if quiz_submitted_key not in st.session_state:
-        st.session_state[quiz_submitted_key] = False
+    # Initialize session state keys unique to this specific subject segment
+    submitted_key = f"submitted_{target_day}_{selected_subject}"
+    score_key = f"score_{target_day}_{selected_subject}"
+    feedback_key = f"feedback_{target_day}_{selected_subject}"
+    saved_answers_key = f"saved_answers_{target_day}_{selected_subject}"
+    
+    if submitted_key not in st.session_state:
+        st.session_state[submitted_key] = False
+        st.session_state[score_key] = 0
+        st.session_state[feedback_key] = []
+        st.session_state[saved_answers_key] = {}
 
-    # Force the sidebar checkbox to stay True if they already unlocked it but haven't finished
-    # This locks them into the quiz view until submission
     checkbox_key = f"toggle_{target_day}_{selected_subject}"
     
-    # Anti-Peeking Enforcement: If quiz started but not done, force it to remain active
-    if checkbox_key in st.session_state and st.session_state[checkbox_key] and not st.session_state[quiz_submitted_key]:
+    # Anti-Peeking Enforcement: Lock the view if the quiz has started but isn't submitted yet
+    if checkbox_key in st.session_state and st.session_state[checkbox_key] and not st.session_state[submitted_key]:
         start_quiz = st.sidebar.checkbox("📝 Ready? Hide Notes & Start Quiz", value=True, disabled=True, key=f"disabled_{checkbox_key}")
         st.sidebar.caption("🔒 Notes are locked until you submit your answers.")
     else:
@@ -122,69 +127,81 @@ if selected_subject:
         if not quiz_data:
             st.info("No quiz items found for this specific subject segment.")
         else:
-            # Wrap inputs inside a form component
             with st.form(key=f"secure_quiz_form_{target_day}_{selected_subject}"):
                 user_answers = {}
                 
                 for i, q in enumerate(quiz_data):
                     st.write(f"**Q{i+1}: {q['question']}**")
+                    
+                    # If already submitted, read the saved selection out of memory; otherwise render fresh
+                    default_idx = None
+                    if st.session_state[submitted_key]:
+                        saved_val = st.session_state[saved_answers_key].get(i)
+                        if saved_val in q['options']:
+                            default_idx = q['options'].index(saved_val)
+                            
                     user_answers[i] = st.radio(
                         "Select the best option:", 
                         options=q['options'], 
                         key=f"q_{target_day}_{selected_subject}_{i}", 
-                        index=None,
-                        disabled=st.session_state[quiz_submitted_key] # Lock choices after submission
+                        index=default_idx,
+                        disabled=st.session_state[submitted_key]
                     )
                     st.write("---")
                     
-                # Hide the submit button if they are already done to prevent double submissions
-                if not st.session_state[quiz_submitted_key]:
+                if not st.session_state[submitted_key]:
                     submit_button = st.form_submit_button(label="Submit Answers")
                 else:
                     submit_button = False
                     st.info("✅ You have completed this quiz. Uncheck the sidebar box if you want to review the study notes again.")
                 
-                # Evaluation Logic Run
+                # Grade the quiz immediately upon submission before state resets
                 if submit_button:
                     unanswered = any(ans is None for ans in user_answers.values())
                     
                     if unanswered:
-                        st.warning("⚠️ Please answer all 5 questions before clicking submit.")
+                        st.warning("⚠️ Please answer all questions before clicking submit.")
                     else:
-                        # Mark quiz as officially finished in memory
-                        st.session_state[quiz_submitted_key] = True
+                        score = 0
+                        wrong_items = []
+                        
+                        for i, q in enumerate(quiz_data):
+                            if user_answers[i] == q['correct_answer']:
+                                score += 1
+                            else:
+                                wrong_items.append({
+                                    "num": i + 1,
+                                    "question": q['question'],
+                                    "your_ans": user_answers[i],
+                                    "correct_ans": q['correct_answer']
+                                })
+                        
+                        # Save everything explicitly to session state
+                        st.session_state[score_key] = score
+                        st.session_state[feedback_key] = wrong_items
+                        st.session_state[saved_answers_key] = user_answers
+                        st.session_state[submitted_key] = True
                         st.rerun()
 
-            # Display Results and Targeted Review Feedback right after submission
-            if st.session_state[quiz_submitted_key]:
-                score = 0
-                total = len(quiz_data)
-                wrong_answers = []
+            # Display Results Panel (Persists flawlessly because data resides in session_state)
+            if st.session_state[submitted_key]:
+                final_score = st.session_state[score_key]
+                total_q = len(quiz_data)
+                missed_list = st.session_state[feedback_key]
                 
-                for i, q in enumerate(quiz_data):
-                    if user_answers[i] == q['correct_answer']:
-                        score += 1
-                    else:
-                        wrong_answers.append({
-                            "num": i + 1,
-                            "question": q['question'],
-                            "your_ans": user_answers[i],
-                            "correct_ans": q['correct_answer']
-                        })
-                
-                # Performance Feedback Header
-                if score == total:
+                st.markdown("### 📊 Quiz Results")
+                if final_score == total_q:
                     st.balloons()
-                    st.success(f"🎉 Perfect Score! {score}/{total}. Outstanding retention!")
-                elif score >= 3:
-                    st.success(f"👍 Good effort! You scored {score}/{total}. Let's look closely at what to improve:")
+                    st.success(f"🎉 Perfect Score! {final_score}/{total_q}. Outstanding retention!")
+                elif final_score >= 3:
+                    st.success(f"👍 Good effort! You scored {final_score}/{total_q}. Let's look closely at what to improve:")
                 else:
-                    st.warning(f"📚 You scored {score}/{total}. Let's treat this as an excellent practice run. Review the items below:")
+                    st.warning(f"📚 You scored {final_score}/{total_q}. Let's treat this as a great practice run. Review the items below:")
                 
-                # Detailed Wrong Answer Breakdown Loop
-                if wrong_answers:
+                # Detailed Correction Breakdown Layout
+                if missed_list:
                     st.markdown("### 🔍 Reviewing Missed Questions")
-                    for item in wrong_answers:
+                    for item in missed_list:
                         with st.expander(f"❌ Question {item['num']}: {item['question']}"):
                             st.write(f"**Your Answer:** `{item['your_ans']}`")
                             st.write(f"**Correct Answer:** `{item['correct_ans']}`")

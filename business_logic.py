@@ -101,6 +101,7 @@ def extract_row_data(package_data_list: List[Dict]) -> Dict[str, Any]:
     db_mastered = utils.validate_list_field(row_data.get('mastered_quizzes'))
     db_claims = utils.validate_list_field(row_data.get('claimed_rewards'))
     db_unlocked_achvs = utils.validate_list_field(row_data.get('unlocked_achievements'))
+    db_journal = utils.validate_dict_field(row_data.get('journal'))
     
     # --- CRITICAL FIX: Look for both possible column names in your database ---
     raw_journal = row_data.get('journal')
@@ -133,6 +134,16 @@ def handle_journal_save(
     """
     journal_date_str = utils.get_journal_date_key()
     is_first_entry_today = utils.is_first_journal_entry_today(db_journal)
+
+    # Sync to database using the correct column name 'journal'
+    return utils.update_weekly_package(
+        supabase,
+        current_sunday,
+        {
+            "journal": db_journal, # Match the database column name 'journal'
+            "character_stats": char_stats,
+        }
+    )
     
     # Block redundant saves if already sealed
     if not is_first_entry_today:
